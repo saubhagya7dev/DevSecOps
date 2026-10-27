@@ -126,6 +126,7 @@ function renderResults() {
 
 function renderJob() {
   const a = current?.artifacts || {}, active = current && !terminal.has(current.status);
+  document.body.classList.toggle('has-review', Boolean(current));
   $('review-title').textContent = current ? current.mode === 'demo' ? 'Preview service · offline example' : current.repository_url.replace('https://github.com/', '') : 'Your next review starts here';
   $('job-state').textContent = current ? ({queued:'In queue',running:'In progress',cancelling:'Cancelling',completed:'Review complete',partial:'Complete · limitations',failed:'Analysis stopped',cancelled:'Cancelled'}[current.status]) : 'Ready when you are';
   $('job-state').className = `job-state ${current?.status || ''}`;
