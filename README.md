@@ -1,142 +1,532 @@
-# DevSecOps · Repository intelligence
+<div align="center">
 
-A local application that connects a public GitHub repository to documented attack mechanisms and produces a cited, preventive security review.
+<img src="web/favicon.svg" width="64" height="64" alt="DevSecOps code-shield logo">
 
-Three AI roles are implemented from the start: **Repository Analyst → Incident Researcher → Security Reviewer**. The browser shows live stage activity, intermediate artifacts, source passages, existing defenses, uncertainty, and downloadable Markdown/JSON. Analysis never executes the target repository or changes its files.
+# DevSecOps
 
-## Run locally
+### Know your code. See the bigger picture.
 
-Requires Python 3.11 or later. There are **no third-party Python packages or frontend build steps**.
+**Incident-informed security reviews for builders.**
 
-```powershell
-cd D:\Code\Projects\DevSecOps
+One public GitHub URL. Three AI roles. A traceable path from source code to preventive action.
+
+<img src="docs/assets/project-badges.svg" width="800" alt="Python 3.11+, three AI roles, no runtime packages, SQLite and SSE, MVP v0.1.0">
+
+<br>
+
+[Quick start](#quick-start) · [The workspace](#the-workspace) · [How it works](#how-it-works) · [Architecture](#architecture) · [Example report](docs/examples/offline-report.md)
+
+</div>
+
+<br>
+
+![DevSecOps landing page with orbital evidence visuals and repository input](docs/assets/hero.png)
+
+> **Current scope:** a local, static, read-only review assistant. It investigates repository evidence and documented attack mechanisms; it does not establish production exposure, execute target code, exploit weaknesses, or apply fixes.
+
+## Why this project exists
+
+A security incident elsewhere can teach you something about your own application—but sharing a language or framework with a breached company is not enough to establish a shared weakness.
+
+DevSecOps connects **documented attack prerequisites** to **observations from your repository**. It records the missing context, acknowledges existing defenses, and turns supported connections into concrete recommendations and verification steps.
+
+The central question is:
+
+> Which documented attack mechanisms have prerequisites supported by this repository, and what should its builders verify or change?
+
+### At a glance
+
+| Capability | What it gives you |
+| --- | --- |
+| **Three specialized AI roles** | Separate repository analysis, incident research, and security review with structured handoffs. |
+| **Commit-pinned source evidence** | File references and line ranges tied to the exact revision inspected. |
+| **Primary-source research** | Retrieved technical reports and source passages, rather than unverified links generated in prose. |
+| **Visible investigation** | Live activity, stage states, inspected evidence, and saved intermediate artifacts. |
+| **Explicit uncertainty** | Supported concerns, verification questions, background lessons, and rejected matches stay distinct. |
+| **Existing-defense awareness** | The reviewer is instructed to look for controls and counterevidence before recommending a change. |
+| **Portable outputs** | A cited Markdown report and JSON artifacts for review, sharing, or further inspection. |
+| **Local operation** | A browser workspace and CLI using Python's standard library, with SQLite persistence. |
+
+---
+
+## The workspace
+
+The interface follows the review from repository inspection to the final report. Its dark visual system includes responsive layouts, keyboard navigation for result tabs, and reduced-motion support.
+
+**The dashboard below shows the fictional offline example. It is not a real incident investigation or a finding against a real repository.**
+
+![DevSecOps dashboard showing a recommendation, missing prerequisites, verification steps, and the live activity feed](docs/assets/dashboard.png)
+
+| View | What you can inspect |
+| --- | --- |
+| **Overview** | Technology, application components, cited observations, coverage, and open questions. |
+| **Incidents** | Attack mechanisms, prerequisites, source passages, victims when documented, and separate dates. |
+| **Recommendations** | Relevance classifications, impact, confidence, counterevidence, actions, and verification steps. |
+| **Evidence** | Inspected file references, code excerpts, skipped files, and validation results. |
+| **Report** | Markdown preview, download, clipboard copy, and JSON artifact export. |
+
+<details>
+<summary><strong>See the mobile review experience</strong></summary>
+
+<br>
+
+<img src="docs/assets/mobile-review.png" width="320" alt="Mobile dashboard showing completed agents and a fictional recommendation that needs verification">
+
+The mobile interface retains the evidence, uncertainty labels, result tabs, and activity stream. This screenshot also uses the synthetic offline example.
+
+</details>
+
+## Quick start
+
+### Requirements
+
+- **Python 3.11 or later.**
+- Git, if cloning the repository.
+- A browser for the workspace.
+- Internet access and a suitable OpenAI API key **only for live analysis**.
+
+There are **no third-party runtime packages to install**, no frontend build step, and no required database service. Node.js is optional for a JavaScript syntax check during development.
+
+### Launch the application
+
+```sh
+git clone https://github.com/saubhagya7dev/DevSecOps.git
+cd DevSecOps
 python run.py
 ```
 
-Open [http://127.0.0.1:8765](http://127.0.0.1:8765). If the port is occupied, use `python run.py --port 8766`.
+Open **[http://127.0.0.1:8765](http://127.0.0.1:8765)**.
 
-Choose **Try offline example** to explore the complete interface immediately. That option uses a clearly labeled fictional repository and fictional incident. It performs no model calls or live research, and is never substituted for a failed live run.
+If your system uses `python3` instead of `python`, substitute that command. An alternative port is available with `python run.py --port 8766`.
 
-## Enable live analysis
+### Explore without credentials
+
+Click **Explore an offline example**.
+
+This runs a deliberately fictional repository and incident through the workflow, including citation checks, saved artifacts, and report generation. **It makes no model or internet research calls.** A failed live run is never silently replaced with this example.
+
+You can inspect the same outputs directly:
+
+- [Synthetic example report](docs/examples/offline-report.md)
+- [Synthetic example artifacts](docs/examples/offline-report.json)
+
+## Configure live analysis
+
+Create a local `.env` file. **If one already exists, edit it directly instead of running the copy commands below.**
+
+**PowerShell**
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Edit `.env` locally, then restart the server:
+**macOS / Linux**
+
+```sh
+cp .env.example .env
+```
+
+Edit the file locally:
 
 ```dotenv
-OPENAI_API_KEY=your-key-here
+OPENAI_API_KEY=your-openai-api-key
 OPENAI_MODEL=gpt-4.1
 GITHUB_TOKEN=
 PORT=8765
 ```
 
-- The OpenAI API key needs access to the configured model and Responses API web search. The default is configurable; the app does not assume that every account/model has access. Live calls incur provider charges.
-- `GITHUB_TOKEN` is optional and is sent only to the initial GitHub API destination, never to source pages or the model. Use a token suitable for public read-only API access. Without it, GitHub's public API rate limit can constrain analyses.
-- Keys remain in the server environment. The browser receives only a configured/not-configured flag. Do not paste credentials into repository URLs, the UI, or chat. `.env` is ignored by Git.
-- Public repository excerpts and retrieved public source text are sent to OpenAI during live runs (`store: false`). Suspected credential lines are redacted before model handoff, but this is not comprehensive secret detection.
-- A configured key does not establish valid billing or model access. Provider errors are displayed rather than hidden.
+Then restart `python run.py` and refresh the browser.
 
-## Workflow
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | Live mode only | Server-side authentication for model calls and built-in web search. |
+| `OPENAI_MODEL` | No | Model identifier; the current default is `gpt-4.1`. The selected model/account must support the API features used. |
+| `GITHUB_TOKEN` | No | Public GitHub API authentication, useful when unauthenticated rate limits constrain a review. |
+| `PORT` | No | Local HTTP port; defaults to `8765`. The `--port` flag overrides it. |
+
+Existing environment variables take precedence over `.env` values. Provider access, model compatibility, and billing are not verified merely because a key is configured.
+
+**Keep credentials on the server.** Never commit actual keys, add them to a repository URL, or paste them into the interface. The browser receives a configuration flag, not the API key. Live model and search calls incur provider charges; actual cost depends on usage and your provider configuration.
+
+## How it works
+
+Three specialized roles run sequentially under a deterministic controller. They can share the same model; they are separate role-specific calls with different context, instructions, and strict JSON contracts.
 
 ```mermaid
-flowchart TD
-    UI[Repository URL] --> API[Local API and job queue]
-    API --> PIN[Pin commit and read bounded source snapshot]
-    PIN --> A[Repository Analyst]
-    A --> P[Validate repository citations]
-    P --> B[Incident Researcher]
-    B --> S[Fetch primary sources and check passages]
-    S --> C[Security Reviewer]
-    C --> F{Specific follow-up needed?}
-    F -->|At most one| Q[Reexamine existing repository or incident evidence]
-    Q --> C
-    F -->|No / limit reached| V[Validate evidence references and render report]
-    V --> R[Markdown report and JSON artifacts]
-    API -. Saved activity via SSE .-> LIVE[Live browser workspace]
+flowchart LR
+    URL["Public GitHub URL"] --> PIN["Pin revision<br/>Read source"]
+    PIN --> ANALYST["Repository Analyst<br/>Map and cite code"]
+    ANALYST --> RESEARCH["Incident Researcher<br/>Retrieve and cite sources"]
+    RESEARCH --> REVIEW["Security Reviewer<br/>Check prerequisites"]
+    REVIEW --> VALIDATE["Evidence checks"]
+    VALIDATE --> OUTPUT["Markdown report<br/>JSON artifacts"]
+    REVIEW -. "One bounded follow-up" .-> RECHECK["Reexamine existing evidence"]
+    RECHECK -.-> REVIEW
+
+    classDef role fill:#24211d,stroke:#b59b77,color:#f5f0e8
+    classDef output fill:#1c2921,stroke:#93ad91,color:#edf3eb
+    class ANALYST,RESEARCH,REVIEW role
+    class OUTPUT output
 ```
 
-The roles are separate model calls with strict JSON contracts and different context/tool access. They may share one model; no separate model training is required. The controller owns all network and storage actions. Repository or source content cannot grant permissions. A reviewer may ask one bounded follow-up to reexamine **already acquired** evidence; additional crawling and deployment access are outside this version.
+### 1. Understand the repository
 
-The researcher uses OpenAI's built-in web search, then the backend independently fetches cited pages. Only provider-returned citation/source metadata supplies candidate URLs; URLs merely generated in model prose are ignored. Search currently covers CISA, Google Threat Intelligence, Microsoft, Google Security Blog, GitHub Blog, Cloudflare Blog, and Unit 42. A source must be fetched successfully before it can support an incident record. HTML and plain text are supported; PDF and JavaScript-only pages may be unavailable.
+The backend validates the URL, resolves the default branch to a commit SHA, and selects a bounded set of readable files. It does not clone and execute the project or install its dependencies.
 
-The default window is **180 days by report publication date**, configurable in the UI. Incident date, publication date, and retrieval date are distinct. Older or undated sources receive explicit labels. An advisory is not automatically treated as an observed attack, and unnamed campaigns are valid evidence.
+The **Repository Analyst** produces:
 
-## Report semantics
+- A project overview and component map.
+- Observed technologies and version information where supported.
+- Security-relevant behavior, such as authentication, uploads, or outbound requests.
+- File-backed observations, research questions, and unknowns.
 
-- **Supported concern:** observed repository evidence supports a relevant attack prerequisite. This is still not proof of exploitability or production exposure.
-- **Needs verification:** a plausible connection needs missing version, configuration, trust-boundary, or deployment evidence.
-- **Background lesson:** relevance without a supported repository weakness; shared technology alone belongs here.
-- Existing defenses and rejected matches are retained.
-- No supported matches is a valid result, not a declaration of security.
+Each observation must reference a real inspected path, inclusive line range, and matching excerpt. Redacted lines cannot become accepted source evidence. Architectural inferences remain distinguishable from direct observations.
 
-Mechanical validation checks exact code passages and line ranges, fetched incident passages, and evidence-ID integrity. A second AI role evaluates relevance and counterevidence. **These checks do not independently prove semantic correctness.** Treat outputs as review aids.
+### 2. Research relevant incidents
 
-## Limits and operation
+The **Incident Researcher** searches for mechanisms and prerequisites relevant to the profile, including application, identity, cloud, CI/CD, and supply-chain patterns when the inspected evidence supports those questions.
 
-| Boundary | Default |
+The current search allowlist covers:
+
+| Source | Research context |
 | --- | --- |
-| Worker concurrency | One review at a time |
-| Pending/running review limit | Five |
-| Files read | 36 |
-| Per-file download | 64 KB |
-| Per-file context | 9,000 characters, complete lines |
-| Total repository context | 100,000 characters |
-| Primary pages fetched | Six |
-| Per-page context | 18,000 characters |
-| Search tool calls | Up to three |
-| Model calls | Up to six, including one optional follow-up and re-review |
-| Output tokens | Up to 6,500 per call |
-| Overall job deadline | 15 minutes, checked between operations |
+| [CISA](https://www.cisa.gov/news-events/cybersecurity-advisories) | Technical advisories and observed campaigns. |
+| [Google Threat Intelligence / Mandiant](https://cloud.google.com/blog/topics/threat-intelligence) | Technical incident investigations and threat research. |
+| [Microsoft Security](https://www.microsoft.com/en-us/security/blog/) | Identity, cloud, application, and supply-chain attack analyses. |
+| [Google Security Blog](https://security.googleblog.com/) | Security research and incident context. |
+| [GitHub Blog](https://github.blog/security/) | Developer and software supply-chain security. |
+| [Cloudflare Blog](https://blog.cloudflare.com/) | Application, network, and infrastructure security research. |
+| [Unit 42](https://unit42.paloaltonetworks.com/) | Threat intelligence and incident analysis. |
 
-Limits are centralized in `devsecops/config.py` and the model adapter. The model's context also includes schemas and instructions. This is a bounded source review, not complete reachability analysis, an SBOM inventory, or a vulnerability scan. Large files, generated/vendor content, unsupported content, skipped files, and truncated trees affect coverage and are disclosed. Do not treat an unobserved defense as an absent defense.
+Candidate URLs come from **provider-returned citation/source metadata**. URLs merely written in model-generated prose are ignored. The backend independently retrieves eligible pages before they can support an incident record, and checks that the cited passage exists in the fetched text.
 
-Cancellation is cooperative: an in-flight network/model request may finish, and its charge may already have been incurred. Saved artifacts remain available. Reloading the browser restores the selected job and replays persisted events. Interrupted jobs are marked failed on server restart. The current MVP does not retry external provider failures automatically; start another run after resolving access/rate-limit errors. Research failures can produce a partial report without incident-linked recommendations.
+The default research window is **180 days by publication date**. Publication date, incident date, and retrieval timestamp remain separate. Older and undated material is explicitly labeled; an advisory is not automatically an observed attack, and a useful campaign need not name its victims.
 
-The HTTP server binds only to `127.0.0.1`. It enforces Host/Origin checks and a same-origin request token for mutations. It is a **local development server**, not an authenticated multi-user production service. Outbound HTTPS resolves and pins public IPs, validates TLS, blocks private/local/reserved destinations, strips authentication on redirects, and limits response sizes. Target code is not installed, imported, or executed. No model shell tools are exposed.
+### 3. Review the connection
 
-Jobs, redacted source excerpts, report artifacts, and activity events are saved locally in ignored `.devsecops/reviews.sqlite3`. There is no automatic retention policy in this MVP. The UI is served from `web/` without external scripts, fonts, or CDNs.
+The **Security Reviewer** compares an attack's requirements against the accepted repository evidence. It is instructed to look for existing defenses, reject weak matches, and preserve uncertainty.
 
-## CLI
+Every accepted recommendation needs an evidence chain:
 
-```powershell
-# Fictional, offline example; no credentials needed
+```text
+Documented mechanism
+    → Required condition
+    → Repository observation
+    → Counterevidence and missing context
+    → Preventive recommendation
+    → Verification step
+```
+
+The reviewer can request **one bounded follow-up** to reexamine material already acquired. That request does not grant additional deployment access or trigger unrestricted crawling.
+
+### 4. Validate and report
+
+The backend checks handoff structure, evidence IDs, source passages, and repository citations before rendering the report.
+
+Invalid references are rejected. A concern supported only by inferred repository observations is downgraded to **Needs verification**. If no defensible incident connection exists, an empty recommendation set is a valid outcome.
+
+> **Reference integrity is not semantic proof.** A matching passage confirms that the text exists; it does not independently establish that the AI interpreted it correctly.
+
+## Architecture
+
+The application uses a standard-library Python backend and a buildless HTML/CSS/JavaScript frontend. A single worker processes queued reviews, while the HTTP server handles browser requests and event streams.
+
+```mermaid
+flowchart TB
+    UI["Browser workspace<br/>Results and live activity"]
+
+    subgraph LOCAL["Local Python application"]
+        API["HTTP API / SSE<br/>Host and Origin checks"]
+        ORCH["Queue + orchestrator<br/>Budgets and cancellation"]
+        ROLES["Three AI roles<br/>Structured handoffs"]
+        CHECKS["Evidence checks<br/>Report renderer"]
+        DB[("SQLite<br/>Jobs, artifacts, events")]
+        READER["Bounded HTTPS reader<br/>Public-IP and TLS checks"]
+
+        API --> ORCH
+        ORCH --> ROLES
+        ROLES --> CHECKS
+        CHECKS --> DB
+        ORCH --> DB
+        API --> DB
+        ORCH --> READER
+        ROLES --> READER
+    end
+
+    subgraph EXTERNAL["External services"]
+        GH["GitHub"]
+        MODEL["OpenAI Responses API<br/>Model and web search"]
+        SOURCES["Primary-source pages"]
+    end
+
+    UI <-->|"HTTP / event stream"| API
+    READER --> GH
+    READER --> MODEL
+    READER --> SOURCES
+
+    classDef local fill:#24211d,stroke:#b59b77,color:#f5f0e8
+    classDef data fill:#1c2921,stroke:#93ad91,color:#edf3eb
+    class API,ORCH,ROLES,CHECKS,READER local
+    class DB data
+```
+
+The model does not decide its own permissions. Repository access, page retrieval, storage, and stage transitions are controlled by backend code. The MVP has no shell tool, MCP server, A2A protocol, vector database, or independent agent processes.
+
+<details>
+<summary><strong>Live updates, refresh recovery, and report delivery</strong></summary>
+
+<br>
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant UI as Browser
+    participant API as Local API
+    participant Worker as Review worker
+    participant DB as SQLite
+
+    User->>UI: Submit public repository URL
+    UI->>API: POST /api/jobs
+    API->>DB: Save queued job
+    API-->>UI: 202 + analysis ID
+    API->>Worker: Queue review
+    UI->>API: GET /api/jobs/{id}/events
+
+    loop Observable progress
+        Worker->>DB: Save stage, artifacts, and event
+        API-->>UI: SSE activity event
+        UI->>API: GET /api/jobs/{id}
+        API-->>UI: Current state and available artifacts
+    end
+
+    Worker->>DB: Save final report and status
+    API-->>UI: SSE finished event
+    User->>UI: Download Markdown
+    UI->>API: GET /api/jobs/{id}/report
+    API-->>UI: Markdown attachment
+
+    Note over UI,DB: Refresh restores the selected job and replays saved events.
+```
+
+The activity feed shows observable operations and concise explanations—not private model reasoning. Closing a browser tab does not cancel the job. Restarting the server marks interrupted jobs as failed while retaining saved artifacts.
+
+</details>
+
+## Reading a report
+
+| Classification | Meaning | Appropriate next step |
+| --- | --- | --- |
+| **Supported concern** | Observed repository evidence supports a relevant attack prerequisite. | Review the cited code and verify remaining exploit conditions. |
+| **Needs verification** | The connection depends on missing version, configuration, trust-boundary, or deployment evidence. | Resolve the specific open questions before drawing a conclusion. |
+| **Background lesson** | Useful context without evidence of the required repository weakness. | Treat it as background guidance, not a detected vulnerability. |
+
+**Impact and confidence are separate qualitative labels.** They are not calibrated probabilities or a numeric security score. A supported concern is not proof of exploitation, and “no matches” is not a security clearance.
+
+A report includes the project overview, coverage, incident sources, recommendations, existing defenses, rejected matches, and unresolved questions.
+
+### Inspectable artifacts
+
+| Artifact | Contents |
+| --- | --- |
+| `repository` | Commit identity, inspected files, returned tree coverage, and skipped-file details. |
+| `profile` | Technologies, components, observations, research questions, and unknowns. |
+| `research` | Retrieved source text, incident records, source passages, dates, and limitations. |
+| `review` | Recommendations, classifications, counterevidence, defenses, and rejected matches. |
+| `followup` | Optional request and answer from the bounded reexamination. |
+| `validation` | Integrity checks, warnings, model-call count, and reported token usage. |
+
+Repository observations use `E` IDs, incident records use `I` IDs, retrieved sources use `S` IDs, and recommendations use `F` IDs. These references connect the handoffs and final report.
+
+## Command-line usage
+
+The CLI shares the same orchestration pipeline as the browser application.
+
+```sh
+# Run the local browser application
+python run.py
+
+# Use another local port
+python run.py --port 8766
+
+# Generate a fictional offline report and neighboring JSON artifact
 python run.py --demo --output test-output/example.md
 
-# Live review; requires configured credentials and internet access
+# Review a real public repository using configured credentials
 python run.py --repo https://github.com/owner/repository --output test-output/report.md
+
+# Equivalent module entry point
+python -m devsecops --demo --output test-output/example.md
 ```
 
-The CLI also writes a neighboring JSON artifact file. Running without `--repo` or `--demo` starts the browser application.
+The CLI research window is currently fixed at 180 days. The UI offers 90, 180, or 365 days; the local API accepts 7–730 days.
 
-## Verification
+## Local API
 
-```powershell
+The interface uses these endpoints. This is a loopback development API, not a publicly exposed service.
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/config` | Configuration status, model identifier, local request token, and example URL. |
+| `GET` | `/api/jobs` | Up to 50 recent job summaries. |
+| `POST` | `/api/jobs` | Create a `live` or `demo` review. |
+| `GET` | `/api/jobs/{id}` | Job status, stage states, artifacts, and available report. |
+| `GET` | `/api/jobs/{id}/events` | SSE activity feed; supports cursor-based replay. |
+| `POST` | `/api/jobs/{id}/cancel` | Request cooperative cancellation. |
+| `GET` | `/api/jobs/{id}/report` | Download the Markdown report. |
+| `GET` | `/api/jobs/{id}/artifacts` | Download the JSON artifacts. |
+
+Requests must satisfy local Host/Origin checks. Mutating requests also require the `X-Review-Token` returned by `/api/config`. The browser manages this automatically. This token is not the OpenAI API key.
+
+## Security and privacy
+
+| Boundary | Implemented behavior | Important limit |
+| --- | --- | --- |
+| **Target repository** | Reads public files from a pinned revision; does not install, import, execute, patch, or deploy them. | A bounded snapshot cannot establish actual production behavior. |
+| **Network access** | Public-IP-pinned HTTPS, TLS validation, restricted ports, redirect checks, response-size limits, and private/local/reserved destination rejection. | Network controls do not prove source content trustworthy. |
+| **Credentials** | Server-side keys; heuristic redaction of suspected secret lines; credential-file exclusions; authorization stripped on redirects. | Redaction can miss secrets and can over-redact legitimate text. |
+| **Untrusted content** | Repository and webpage text are treated as evidence, with fixed role instructions and locally checked contracts. | Prompt injection can still affect interpretation; instructions alone are not a complete defense. |
+| **Model authority** | No shell execution or repository-write tools are exposed. | AI recommendations still need human review. |
+| **Browser access** | Loopback binding, Host/Origin checks, request tokens for mutations, and a restrictive Content Security Policy. | No multi-user authentication or production deployment hardening. |
+| **Storage** | Jobs, redacted excerpts, artifacts, reports, and activity events persist locally in SQLite. | Local artifacts are plaintext; retention and filesystem access are the operator's responsibility. |
+
+Live analysis sends inspected public source excerpts and retrieved public page text to OpenAI, with `store: false` in the request. This flag should not be interpreted as a blanket claim about all provider-side retention or processing policies.
+
+The optional GitHub token is used for GitHub API requests; it is not passed as model context or sent to incident-report sites.
+
+Runtime data lives in the ignored `.devsecops/reviews.sqlite3` file. The frontend uses local scripts, styles, and system fonts without external CDNs. There is no automatic retention policy in this MVP.
+
+## Budgets and operational behavior
+
+| Boundary | Current default |
+| --- | --- |
+| Active worker | One review at a time |
+| Accepted queued/running/cancelling jobs | Five |
+| Files read | 36 |
+| Per-file download | 64,000 bytes |
+| Per-file context | Up to 9,000 characters, retaining complete lines |
+| Total repository context | Up to 100,000 characters |
+| Primary pages fetched | Up to six |
+| Per-page context | Up to 18,000 characters |
+| Search tool calls | Up to three |
+| Model calls | Up to six, including an optional follow-up and re-review |
+| Model output | Up to 6,500 tokens per call |
+| Job deadline | 900 seconds, checked between operations |
+
+Defaults live in [config.py](devsecops/config.py), with model/search limits in [agents.py](devsecops/agents.py). Increasing budgets changes coverage, latency, and potential provider cost.
+
+**Cancellation is cooperative.** An in-flight network/model request can finish after cancellation is requested, and a provider charge may already have occurred.
+
+A failed research stage can produce a clearly labeled partial report without incident-linked recommendations. Other failures preserve available artifacts and expose an error. External provider failures are not automatically retried; address the cause before starting another run.
+
+## Development and verification
+
+```sh
+# Standard-library tests, including local HTTP integration
 python -m unittest discover -v
+
+# Python syntax check
 python -m compileall -q devsecops run.py
+
+# Optional JavaScript syntax check; requires Node.js
 node --check web/app.js
 ```
 
-Node is optional and needed only for the JavaScript syntax check. Tests use the Python standard library and controlled fixtures/mocks. API integration tests open loopback sockets; the environment must permit them. Test temporary files stay inside ignored `test-output/`.
+The current suite contains **29 test cases** covering:
 
-The suite covers evidence rejection, source provenance, date handling, existing defenses, uncertainty, network boundaries, local API protection, event replay, cancellation, restart recovery, offline execution, and mocked live orchestration. A real GitHub ingestion smoke test was performed against `octocat/Hello-World`. **Live model/search execution requires an API key and has not been verified in this workspace.**
+- Citation rejection, evidence-reference integrity, date handling, and unknowns.
+- Retention of existing defenses and rejected matches in controlled fixtures.
+- URL validation, DNS/private-network boundaries, redirects, and redaction.
+- Structured model handoffs and provider-returned source provenance.
+- Local API protections, report delivery, and event replay.
+- Cancellation, completion races, restart recovery, and partial results.
+- Offline execution and a complete mocked model/search workflow, including the bounded follow-up.
 
-## Source layout
+API tests need permission to open and connect to loopback sockets. Temporary test data stays under ignored `test-output/`.
+
+**Verification scope:** the 29 tests passed during the implementation/redesign work, and the browser workflow, downloads, responsive layout, and public GitHub ingestion were exercised. The screenshots and included example report use offline fixtures. These checks are not a live-provider benchmark, a security audit, or evidence that generated recommendations are always correct.
+
+### Project structure
 
 ```text
-devsecops/
-  agents.py       Model adapter and three roles
-  contracts.py    JSON handoff schemas and local validation
-  repository.py   Commit-pinned, bounded GitHub reader
-  network.py      Public-IP-pinned HTTPS and credential redaction
-  evidence.py     Citation validation and Markdown generation
-  pipeline.py     Orchestration, follow-up, cancellation, partial results
-  store.py        SQLite jobs, artifacts, and replayable events
-  server.py       Loopback HTTP API and SSE
-  demo.py         Explicitly synthetic offline fixture
-web/              Buildless browser workspace
-tests/            Standard-library test suite
+DevSecOps/
+├── devsecops/
+│   ├── agents.py          Model adapter and three role implementations
+│   ├── contracts.py       Strict JSON schemas and local shape validation
+│   ├── repository.py      Commit-pinned, bounded GitHub reader
+│   ├── network.py         Public-IP-pinned HTTPS and credential redaction
+│   ├── evidence.py        Evidence checks and Markdown report rendering
+│   ├── pipeline.py        Orchestration, follow-up, cancellation, partial results
+│   ├── store.py           SQLite jobs, artifacts, and activity events
+│   ├── server.py          Loopback HTTP API, static UI, and SSE
+│   ├── config.py          Environment loading and analysis budgets
+│   ├── demo.py            Explicitly fictional offline fixture
+│   └── __main__.py        Server and CLI entry points
+├── web/
+│   ├── index.html         Repository review workspace
+│   ├── styles.css         Responsive dark visual system
+│   ├── app.js             Job submission, activity, evidence, and exports
+│   └── favicon.svg        Code-shield identity
+├── tests/                 Standard-library test suite
+├── docs/
+│   ├── assets/            Repository-hosted screenshots and project badges
+│   └── examples/          Fictional example report and JSON artifacts
+├── .env.example           Environment template; use placeholders only
+├── MVP.md                 Product scope and acceptance criteria
+├── pyproject.toml         Python project metadata
+└── run.py                 Simple launcher
 ```
 
-API implementation references: [Responses structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs), [web search and source metadata](https://developers.openai.com/api/docs/guides/tools-web-search).
+## Troubleshooting
+
+| Symptom | What to check |
+| --- | --- |
+| **Live mode needs setup** | Set `OPENAI_API_KEY` in the server environment or local `.env`, restart the server, and refresh. |
+| **Configured, but analysis fails** | A configured flag only means a key is present. Check account access, model compatibility, network access, billing, and the displayed upstream error. |
+| **GitHub access/rate-limit error** | Confirm the repository is public and use an appropriate read-only `GITHUB_TOKEN` if needed. |
+| **Invalid repository URL** | Supply `https://github.com/owner/repository`. Branch paths, file URLs, queries, private repositories, and non-GitHub hosts are unsupported. |
+| **No readable files or sparse coverage** | Check file sizes, supported text types, excluded/generated content, context limits, and the coverage section. |
+| **No matching incidents** | Inspect source-fetch limitations and the research window. PDF/JavaScript-only pages may be unavailable. No matches does not mean no risk. |
+| **Partial report** | Read the research and validation limitations; available artifacts remain inspectable. |
+| **Invalid local request token** | Refresh the page after a server restart. |
+| **Port already in use** | Launch with `python run.py --port 8766`. |
+| **Interrupted job after restart** | Start a new review. Saved artifacts from the old job remain available. |
+
+## Limitations and next directions
+
+The current version reviews a selected set of text files. It does not provide complete dependency resolution, call-graph reachability, an SBOM inventory, runtime monitoring, exploit testing, production configuration discovery, or compliance certification. It supports public repositories and reads HTML/plain-text research sources; PDF extraction and private-repository access are not implemented.
+
+The model can misinterpret evidence, infer unsupported relationships, or overlook relevant controls. Shared technology alone must remain a background connection. Human review and deployment context are still required.
+
+Potential next steps—**not current capabilities**—include:
+
+- A larger, held-out repository–incident evaluation set with measured relevance and citation-support quality.
+- Better source selection and language-aware repository indexing.
+- More incident-source adapters and PDF extraction.
+- Controlled retry policies, retention settings, and clearer usage accounting.
+- Authenticated deployment and additional safeguards before any multi-user release.
+
+## Contributing
+
+Open an issue describing the problem or proposed behavior before a substantial change. Keep pull requests focused, document coverage/permission changes, and include relevant fixture or integration checks. Clearly label synthetic incidents and never present fixture output as real-world findings.
+
+Do not include keys, personal runtime data, or sensitive disclosure details in public issues or commits. Coordinate a private reporting channel with the maintainer before sharing sensitive security reports.
+
+## License
+
+A `LICENSE` file has not been added to this repository. No project license is currently specified.
+
+## References
+
+- [MVP scope and acceptance criteria](MVP.md)
+- [OpenAI Responses API: structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs)
+- [OpenAI Responses API: web search and source metadata](https://developers.openai.com/api/docs/guides/tools-web-search)
+
+---
+
+<div align="center">
+
+**Built for builders, with context.**
+
+*Better evidence. More informed decisions.*
+
+</div>
