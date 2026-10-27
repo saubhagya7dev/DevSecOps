@@ -138,6 +138,7 @@ function renderJob() {
     const status = current?.stages[el.dataset.stage] || 'queued';
     el.className = `agent-card ${status}`;
     el.querySelector('.stage-indicator').setAttribute('aria-label', status);
+    el.querySelector('.agent-status').textContent = status === 'queued' ? 'WAITING' : status.toUpperCase();
     el.title = `${stageNames[el.dataset.stage]}: ${status}`;
   });
   $('cancel-button').hidden = !active;
