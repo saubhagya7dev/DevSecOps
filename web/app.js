@@ -216,6 +216,7 @@ async function start(mode) {
   try {
     const result = await api('/api/jobs', {method:'POST', body:JSON.stringify({repository_url:$('repo-url').value.trim(), mode, days:Number($('window').value)})});
     switchTab('overview'); await selectJob(result.id); await loadHistory();
+    scrollToElement(document.querySelector('#workspace'));
   } catch (error) { $('form-error').textContent = error.message; $('form-error').hidden = false; }
   finally { isSubmitting = false; $('start-button').disabled = false; $('demo-button').disabled = false; }
 }
