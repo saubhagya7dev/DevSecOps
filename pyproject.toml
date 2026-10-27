@@ -1,0 +1,9 @@
+[project]
+name = "devsecops-repository-review"
+version = "0.1.0"
+description = "Local, incident-informed repository security review with three AI roles"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+devsecops-review = "devsecops.__main__:main"
