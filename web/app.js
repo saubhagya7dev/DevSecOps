@@ -238,8 +238,8 @@ document.querySelector('.tabs').addEventListener('keydown', e => {
   tabs[i].focus(); switchTab(tabs[i].dataset.tab);
 });
 document.addEventListener('click', e => {
-  const job = e.target.closest('[data-job]'); if (job) { $('info-dialog').close(); selectJob(job.dataset.job); document.querySelector('.analysis-grid').scrollIntoView({behavior:'smooth', block:'start'}); }
-  const ev = e.target.closest('[data-evidence]'); if (ev) { e.preventDefault(); switchTab('evidence'); document.getElementById(`evidence-${ev.dataset.evidence}`)?.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+  const job = e.target.closest('[data-job]'); if (job) { $('info-dialog').close(); selectJob(job.dataset.job); scrollToElement(document.querySelector('.analysis-grid')); }
+  const ev = e.target.closest('[data-evidence]'); if (ev) { e.preventDefault(); switchTab('evidence'); scrollToElement(document.getElementById(`evidence-${ev.dataset.evidence}`), 'nearest'); }
   const inc = e.target.closest('[data-incident]'); if (inc) { e.preventDefault(); switchTab('incidents'); }
 });
 $('settings-nav').addEventListener('click',showSettings); $('connection-status').addEventListener('click',showSettings);
