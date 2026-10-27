@@ -1,0 +1,165 @@
+{
+  "repository": {
+    "url": "https://github.com/example-labs/preview-service",
+    "name": "example-labs/preview-service",
+    "commit": "0000000000000000000000000000000000000000",
+    "description": "SYNTHETIC EXAMPLE \u2014 not an actual GitHub repository",
+    "language": "Python",
+    "files": [
+      {
+        "path": "app/preview.py",
+        "content": "import requests\n\ndef preview(url):\n    return requests.get(url, timeout=5).text\n",
+        "truncated": false,
+        "url": "https://github.com/example-labs/preview-service/blob/0000000000000000000000000000000000000000/app/preview.py"
+      }
+    ],
+    "tree_paths": [
+      "app/preview.py"
+    ],
+    "skipped": [],
+    "coverage": {
+      "files_read": 1,
+      "files_in_tree": 1,
+      "eligible_files": 1,
+      "files_skipped_by_budget_or_error": 0,
+      "truncated_files": 0,
+      "tree_truncated": false,
+      "characters_read": 80
+    }
+  },
+  "profile": {
+    "summary": "Illustrative Python preview service that fetches a caller-provided URL. This offline fixture demonstrates the workflow; no real repository was inspected.",
+    "technologies": [
+      {
+        "name": "Python / Requests",
+        "version": "Unknown in this fixture",
+        "evidence_ids": [
+          "E1"
+        ]
+      }
+    ],
+    "components": [
+      {
+        "name": "Preview fetcher",
+        "description": "Performs an outbound HTTP request using the supplied URL.",
+        "evidence_ids": [
+          "E1"
+        ]
+      }
+    ],
+    "observations": [
+      {
+        "id": "E1",
+        "claim": "The preview function passes its URL argument into an outbound request.",
+        "path": "app/preview.py",
+        "start_line": 3,
+        "end_line": 4,
+        "quote": "def preview(url):\n    return requests.get(url, timeout=5).text",
+        "kind": "observed",
+        "url": "https://github.com/example-labs/preview-service/blob/0000000000000000000000000000000000000000/app/preview.py#L3-L4"
+      }
+    ],
+    "research_questions": [
+      "Which SSRF attack prerequisites should a URL-preview feature defend against?"
+    ],
+    "unknowns": [
+      "Caller authentication, route exposure, URL validation upstream, and outbound network policies are unknown."
+    ]
+  },
+  "research": {
+    "incidents": [
+      {
+        "id": "I1",
+        "title": "Illustrative SSRF scenario \u2014 fictional",
+        "source_id": "S1",
+        "source_quote": "In this fictional training scenario, an attacker supplied an internal destination to a URL-preview feature. The server fetched that destination using its own network access.",
+        "publication_date": "unknown",
+        "incident_date": "unknown",
+        "victim": "Fictional training service",
+        "source_type": "background guidance",
+        "mechanism": "Server-side request forgery through an attacker-controlled URL.",
+        "prerequisites": [
+          "Attacker controls the requested destination.",
+          "Server can reach a sensitive destination."
+        ],
+        "technologies": [
+          "Outbound HTTP client"
+        ],
+        "mitigations": [
+          "Destination validation and network restrictions."
+        ],
+        "unknowns": [
+          "No real incident is represented."
+        ],
+        "recency": "Publication date unverified"
+      }
+    ],
+    "sources": [
+      {
+        "id": "S1",
+        "title": "Synthetic local training passage \u2014 not a published incident",
+        "url": "https://example.org/fictional-training-only",
+        "text": "In this fictional training scenario, an attacker supplied an internal destination to a URL-preview feature. The server fetched that destination using its own network access.",
+        "retrieved_at": "Offline fixture; no network request"
+      }
+    ],
+    "research_limitations": [
+      "OFFLINE EXAMPLE: all repository and incident content in this run is synthetic."
+    ]
+  },
+  "review": {
+    "summary": "One prerequisite deserves verification in this hypothetical example. No exploitability claim is established.",
+    "findings": [
+      {
+        "id": "F1",
+        "title": "Verify URL destination controls",
+        "classification": "Needs verification",
+        "impact": "High",
+        "confidence": "Medium",
+        "incident_ids": [
+          "I1"
+        ],
+        "evidence_ids": [
+          "E1"
+        ],
+        "mechanism": "A server fetches an attacker-selected destination.",
+        "prerequisite": "Untrusted input reaches this function and sensitive destinations are reachable.",
+        "reasoning": "The function uses the URL directly, but the fixture does not show its callers or network boundary.",
+        "counterevidence": "A request timeout exists; upstream destination validation may also exist but is not shown.",
+        "missing_information": [
+          "Input trust boundary",
+          "Upstream validation",
+          "Outbound network policy"
+        ],
+        "action": "Inspect callers and validate destination policy, redirects, and resolved addresses; restrict outbound access where appropriate.",
+        "verification": "In an isolated environment, test that prohibited destinations and redirect targets are rejected while permitted URLs still work."
+      }
+    ],
+    "existing_defenses": [
+      {
+        "description": "The HTTP request sets a five-second timeout.",
+        "evidence_ids": [
+          "E1"
+        ]
+      }
+    ],
+    "rejected_matches": [],
+    "questions": [
+      "Is this function reachable from an untrusted request?"
+    ],
+    "followup_requests": []
+  },
+  "validation": {
+    "checks": [
+      "Repository quote and line-range integrity",
+      "Incident passage integrity",
+      "Recommendation evidence references",
+      "Date normalization and recency labels"
+    ],
+    "warnings": [],
+    "model_calls": 0,
+    "tokens": 0,
+    "model": "No model \u2014 synthetic offline fixture",
+    "semantic_limit": "Reference integrity checks do not independently prove semantic correctness."
+  }
+}
