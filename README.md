@@ -10,7 +10,11 @@
 
 One public GitHub URL. Three AI roles. A traceable path from source code to preventive action.
 
-<img src="docs/assets/project-badges.svg" width="800" alt="Python 3.11+, three AI roles, no runtime packages, SQLite and SSE, MVP v0.1.0">
+[![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+![AI roles](https://img.shields.io/badge/AI_roles-3-8A63D2)
+![Runtime dependencies](https://img.shields.io/badge/runtime_dependencies-0-2EA44F)
+[![SQLite](https://img.shields.io/badge/storage-SQLite-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
+[![Version](https://img.shields.io/badge/version-0.1.0-blue)](pyproject.toml)
 
 <br>
 
@@ -468,7 +472,7 @@ DevSecOps/
 │   └── favicon.svg        Code-shield identity
 ├── tests/                 Standard-library test suite
 ├── docs/
-│   ├── assets/            Repository-hosted screenshots and project badges
+│   ├── assets/            Repository-hosted product screenshots
 │   └── examples/          Fictional example report and JSON artifacts
 ├── .env.example           Environment template; use placeholders only
 ├── MVP.md                 Product scope and acceptance criteria
