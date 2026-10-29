@@ -11,6 +11,8 @@ def obj(**properties):
     return {'type': 'object', 'properties': properties, 'required': list(properties), 'additionalProperties': False}
 
 
+SEARCH_PLAN = obj(queries=array(S))
+
 PROFILE = obj(
     summary=S,
     technologies=array(obj(name=S, version=S, evidence_ids=array(S))),
