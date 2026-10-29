@@ -87,7 +87,7 @@ The mobile interface retains the evidence, uncertainty labels, result tabs, and 
 - **Python 3.11 or later.**
 - Git, if cloning the repository.
 - A browser for the workspace.
-- Internet access and a suitable OpenAI API key **only for live analysis**.
+- Internet access and Gemini, Groq, and Tavily API keys **only for live analysis**.
 
 There are **no third-party runtime packages to install**, no frontend build step, and no required database service. Node.js is optional for a JavaScript syntax check during development.
 
@@ -121,20 +121,24 @@ Create a local `.env` file. **If one already exists, edit it directly instead of
 **PowerShell**
 
 ```powershell
-Copy-Item .env.example .env
+Copy-Item .env.roles.example .env
 ```
 
 **macOS / Linux**
 
 ```sh
-cp .env.example .env
+cp .env.roles.example .env
 ```
 
 Edit the file locally:
 
 ```dotenv
-OPENAI_API_KEY=your-openai-api-key
-OPENAI_MODEL=gpt-4.1
+GEMINI_API_KEY=your-gemini-api-key
+GROQ_API_KEY=your-groq-api-key
+TAVILY_API_KEY=your-tavily-api-key
+ANALYST_MODEL=gemini-3.8-flash
+RESEARCHER_MODEL=qwen/qwen3.8-27b
+REVIEWER_MODEL=openai/gpt-oss-120b
 GITHUB_TOKEN=
 PORT=8765
 ```
@@ -143,8 +147,12 @@ Then restart `python run.py` and refresh the browser.
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `OPENAI_API_KEY` | Live mode only | Server-side authentication for model calls and built-in web search. |
-| `OPENAI_MODEL` | No | Model identifier; the current default is `gpt-4.1`. The selected model/account must support the API features used. |
+| `GEMINI_API_KEY` | Live mode only | Google Gemini Developer API authentication for the Repository Analyst. |
+| `GROQ_API_KEY` | Live mode only | Groq authentication shared by the Incident Researcher and Security Reviewer. |
+| `TAVILY_API_KEY` | Live mode only | Tavily search authentication; separate from model inference. |
+| `ANALYST_MODEL` | No | Gemini model; defaults to `gemini-3.8-flash`. |
+| `RESEARCHER_MODEL` | No | Groq model; defaults to `qwen/qwen3.8-27b`. |
+| `REVIEWER_MODEL` | No | Groq model; defaults to `openai/gpt-oss-120b`. |
 | `GITHUB_TOKEN` | No | Public GitHub API authentication, useful when unauthenticated rate limits constrain a review. |
 | `PORT` | No | Local HTTP port; defaults to `8765`. The `--port` flag overrides it. |
 
@@ -154,14 +162,22 @@ Existing environment variables take precedence over `.env` values. Provider acce
 
 ## How it works
 
-Three specialized roles run sequentially under a deterministic controller. They can share the same model; they are separate role-specific calls with different context, instructions, and strict JSON contracts.
+Three specialized roles run sequentially under a deterministic controller. Each has its own hosted model, context, instructions, and JSON contract. Every response is validated locally before the next stage accepts it.
+
+| Role | Hosted provider | Default model | Tools |
+| --- | --- | --- | --- |
+| Repository Analyst | Google Gemini Developer API | `gemini-3.8-flash` | No model tools; backend supplies inspected files. |
+| Incident Researcher | Groq | `qwen/qwen3.8-27b` | Generates queries; backend calls Tavily and fetches eligible pages. |
+| Security Reviewer | Groq | `openai/gpt-oss-120b` | Reviews existing evidence; may request one bounded follow-up. |
+
+**Migrating from the shared OpenAI setup:** merge the three credential settings into your existing `.env`, restart, and refresh the browser. `OPENAI_API_KEY` and `OPENAI_MODEL` are no longer used. The `openai/` prefix in the reviewer model ID identifies the model publisher; requests go to Groq using `GROQ_API_KEY`. There is no silent model or provider fallback. Optional model overrides must support the same structured-output API features.
 
 ```mermaid
 flowchart LR
     URL["Public GitHub URL"] --> PIN["Pin revision<br/>Read source"]
-    PIN --> ANALYST["Repository Analyst<br/>Map and cite code"]
-    ANALYST --> RESEARCH["Incident Researcher<br/>Retrieve and cite sources"]
-    RESEARCH --> REVIEW["Security Reviewer<br/>Check prerequisites"]
+    PIN --> ANALYST["Repository Analyst<br/>Gemini 3.8 Flash"]
+    ANALYST --> RESEARCH["Incident Researcher<br/>Qwen 3.8 + Tavily"]
+    RESEARCH --> REVIEW["Security Reviewer<br/>GPT OSS 120B"]
     REVIEW --> VALIDATE["Evidence checks"]
     VALIDATE --> OUTPUT["Markdown report<br/>JSON artifacts"]
     REVIEW -. "One bounded follow-up" .-> RECHECK["Reexamine existing evidence"]
@@ -202,7 +218,7 @@ The current search allowlist covers:
 | [Cloudflare Blog](https://blog.cloudflare.com/) | Application, network, and infrastructure security research. |
 | [Unit 42](https://unit42.paloaltonetworks.com/) | Threat intelligence and incident analysis. |
 
-Candidate URLs come from **provider-returned citation/source metadata**. URLs merely written in model-generated prose are ignored. The backend independently retrieves eligible pages before they can support an incident record, and checks that the cited passage exists in the fetched text.
+Qwen first generates up to three bounded search queries. The backend submits them to Tavily with the primary-source domain allowlist and publication-window dates. Candidate URLs come only from **Tavily result metadata**. URLs merely written in model-generated prose are ignored. The backend independently retrieves eligible pages before they can support an incident record, and checks that the cited passage exists in the fetched text.
 
 The default research window is **180 days by publication date**. Publication date, incident date, and retrieval timestamp remain separate. Older and undated material is explicitly labeled; an advisory is not automatically an observed attack, and a useful campaign need not name its victims.
 
@@ -259,13 +275,17 @@ flowchart TB
 
     subgraph EXTERNAL["External services"]
         GH["GitHub"]
-        MODEL["OpenAI Responses API<br/>Model and web search"]
+        GEMINI["Gemini Developer API<br/>Repository Analyst"]
+        GROQ["Groq Chat Completions<br/>Researcher + Reviewer"]
+        TAVILY["Tavily Search API<br/>Primary-source discovery"]
         SOURCES["Primary-source pages"]
     end
 
     UI <-->|"HTTP / event stream"| API
     READER --> GH
-    READER --> MODEL
+    READER --> GEMINI
+    READER --> GROQ
+    READER --> TAVILY
     READER --> SOURCES
 
     classDef local fill:#24211d,stroke:#b59b77,color:#f5f0e8
@@ -337,7 +357,7 @@ A report includes the project overview, coverage, incident sources, recommendati
 | `research` | Retrieved source text, incident records, source passages, dates, and limitations. |
 | `review` | Recommendations, classifications, counterevidence, defenses, and rejected matches. |
 | `followup` | Optional request and answer from the bounded reexamination. |
-| `validation` | Integrity checks, warnings, model-call count, and reported token usage. |
+| `validation` | Integrity checks, warnings, configured role models, per-role call/token usage, and Tavily request count. |
 
 Repository observations use `E` IDs, incident records use `I` IDs, retrieved sources use `S` IDs, and recommendations use `F` IDs. These references connect the handoffs and final report.
 
@@ -370,7 +390,7 @@ The interface uses these endpoints. This is a loopback development API, not a pu
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
-| `GET` | `/api/config` | Configuration status, model identifier, local request token, and example URL. |
+| `GET` | `/api/config` | Credential readiness, role/provider/model mapping, missing key names, local request token, and example URL. |
 | `GET` | `/api/jobs` | Up to 50 recent job summaries. |
 | `POST` | `/api/jobs` | Create a `live` or `demo` review. |
 | `GET` | `/api/jobs/{id}` | Job status, stage states, artifacts, and available report. |
@@ -379,7 +399,7 @@ The interface uses these endpoints. This is a loopback development API, not a pu
 | `GET` | `/api/jobs/{id}/report` | Download the Markdown report. |
 | `GET` | `/api/jobs/{id}/artifacts` | Download the JSON artifacts. |
 
-Requests must satisfy local Host/Origin checks. Mutating requests also require the `X-Review-Token` returned by `/api/config`. The browser manages this automatically. This token is not the OpenAI API key.
+Requests must satisfy local Host/Origin checks. Mutating requests also require the `X-Review-Token` returned by `/api/config`. The browser manages this automatically. This token is separate from provider API credentials.
 
 ## Security and privacy
 
@@ -393,7 +413,7 @@ Requests must satisfy local Host/Origin checks. Mutating requests also require t
 | **Browser access** | Loopback binding, Host/Origin checks, request tokens for mutations, and a restrictive Content Security Policy. | No multi-user authentication or production deployment hardening. |
 | **Storage** | Jobs, redacted excerpts, artifacts, reports, and activity events persist locally in SQLite. | Local artifacts are plaintext; retention and filesystem access are the operator's responsibility. |
 
-Live analysis sends inspected public source excerpts and retrieved public page text to OpenAI, with `store: false` in the request. This flag should not be interpreted as a blanket claim about all provider-side retention or processing policies.
+Live analysis sends inspected public source excerpts to Google Gemini, the accepted repository profile and fetched incident evidence to Groq, and generated search queries to Tavily. A bounded analyst follow-up returns to Gemini; a researcher follow-up returns to Qwen on Groq. Provider-side processing and retention follow each provider’s terms; local storage controls do not establish zero provider retention.
 
 The optional GitHub token is used for GitHub API requests; it is not passed as model context or sent to incident-report sites.
 
@@ -411,12 +431,12 @@ Runtime data lives in the ignored `.devsecops/reviews.sqlite3` file. The fronten
 | Total repository context | Up to 100,000 characters |
 | Primary pages fetched | Up to six |
 | Per-page context | Up to 18,000 characters |
-| Search tool calls | Up to three |
+| Tavily search requests | Up to three; each returns at most six candidates |
 | Model calls | Up to six, including an optional follow-up and re-review |
 | Model output | Up to 6,500 tokens per call |
 | Job deadline | 900 seconds, checked between operations |
 
-Defaults live in [config.py](devsecops/config.py), with model/search limits in [agents.py](devsecops/agents.py). Increasing budgets changes coverage, latency, and potential provider cost.
+Defaults live in [config.py](devsecops/config.py), with request limits in [providers.py](devsecops/providers.py) and source selection in [agents.py](devsecops/agents.py). Increasing budgets changes coverage, latency, and potential provider cost.
 
 **Cancellation is cooperative.** An in-flight network/model request can finish after cancellation is requested, and a provider charge may already have occurred.
 
@@ -435,26 +455,28 @@ python -m compileall -q devsecops run.py
 node --check web/app.js
 ```
 
-The current suite contains **29 test cases** covering:
+The current suite contains **40 test cases** covering:
 
 - Citation rejection, evidence-reference integrity, date handling, and unknowns.
 - Retention of existing defenses and rejected matches in controlled fixtures.
 - URL validation, DNS/private-network boundaries, redirects, and redaction.
-- Structured model handoffs and provider-returned source provenance.
+- Gemini/Groq role routing, credential isolation, structured handoffs, and Tavily-returned source provenance.
+- Incomplete/refused output rejection, shared call budgets, search failures, and provider key redaction.
 - Local API protections, report delivery, and event replay.
 - Cancellation, completion races, restart recovery, and partial results.
 - Offline execution and a complete mocked model/search workflow, including the bounded follow-up.
 
 API tests need permission to open and connect to loopback sockets. Temporary test data stays under ignored `test-output/`.
 
-**Verification scope:** the 29 tests passed during the implementation/redesign work, and the browser workflow, downloads, responsive layout, and public GitHub ingestion were exercised. The screenshots and included example report use offline fixtures. These checks are not a live-provider benchmark, a security audit, or evidence that generated recommendations are always correct.
+**Verification scope:** all 40 tests pass after the hosted-provider migration, including the complete mocked Gemini/Groq/Tavily workflow and bounded follow-up. Earlier checks exercised the browser workflow, downloads, responsive layout, and public GitHub ingestion. No paid live-provider analysis was performed for this migration. The screenshots and included example report use offline fixtures. These checks are not a live-provider benchmark, a security audit, or evidence that generated recommendations are always correct.
 
 ### Project structure
 
 ```text
 DevSecOps/
 ├── devsecops/
-│   ├── agents.py          Model adapter and three role implementations
+│   ├── providers.py       Gemini, Groq, and Tavily adapters
+│   ├── agents.py          Three role implementations and source retrieval
 │   ├── contracts.py       Strict JSON schemas and local shape validation
 │   ├── repository.py      Commit-pinned, bounded GitHub reader
 │   ├── network.py         Public-IP-pinned HTTPS and credential redaction
@@ -474,7 +496,7 @@ DevSecOps/
 ├── docs/
 │   ├── assets/            Repository-hosted product screenshots
 │   └── examples/          Fictional example report and JSON artifacts
-├── .env.example           Environment template; use placeholders only
+├── .env.roles.example     Environment template; use placeholders only
 ├── MVP.md                 Product scope and acceptance criteria
 ├── pyproject.toml         Python project metadata
 └── run.py                 Simple launcher
@@ -484,7 +506,7 @@ DevSecOps/
 
 | Symptom | What to check |
 | --- | --- |
-| **Live mode needs setup** | Set `OPENAI_API_KEY` in the server environment or local `.env`, restart the server, and refresh. |
+| **Live mode needs setup** | Set `GEMINI_API_KEY`, `GROQ_API_KEY`, and `TAVILY_API_KEY` in the server environment or local `.env`, restart the server, and refresh. |
 | **Configured, but analysis fails** | A configured flag only means a key is present. Check account access, model compatibility, network access, billing, and the displayed upstream error. |
 | **GitHub access/rate-limit error** | Confirm the repository is public and use an appropriate read-only `GITHUB_TOKEN` if needed. |
 | **Invalid repository URL** | Supply `https://github.com/owner/repository`. Branch paths, file URLs, queries, private repositories, and non-GitHub hosts are unsupported. |
@@ -522,8 +544,10 @@ A `LICENSE` file has not been added to this repository. No project license is cu
 ## References
 
 - [MVP scope and acceptance criteria](MVP.md)
-- [OpenAI Responses API: structured outputs](https://developers.openai.com/api/docs/guides/structured-outputs)
-- [OpenAI Responses API: web search and source metadata](https://developers.openai.com/api/docs/guides/tools-web-search)
+- [Google Gemini: generating content API](https://ai.google.dev/api/generate-content)
+- [Groq: structured outputs](https://console.groq.com/docs/structured-outputs)
+- [Groq: supported models](https://console.groq.com/docs/models)
+- [Tavily: search API](https://docs.tavily.com/documentation/api-reference/endpoint/search)
 
 ---
 
