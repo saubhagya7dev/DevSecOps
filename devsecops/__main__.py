@@ -4,7 +4,7 @@ import sys
 import time
 from pathlib import Path
 
-from .config import load_env
+from .config import load_env, missing_credentials
 
 
 def main():
@@ -25,8 +25,8 @@ def main():
     from .store import Store
     repo = DEMO_URL if args.demo else args.repo
     parse_repo(repo)
-    if not args.demo and not os.getenv('OPENAI_API_KEY'):
-        parser.error('Set OPENAI_API_KEY before starting a live analysis.')
+    if not args.demo and missing_credentials():
+        parser.error('Set ' + ', '.join(missing_credentials()) + ' before starting a live analysis.')
     store = Store()
     job = store.create(repo, 'demo' if args.demo else 'live', 180)
     runner = Runner(store, demo_delay=0)
