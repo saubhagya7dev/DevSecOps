@@ -16,7 +16,7 @@ This version performs static, read-only analysis. It does not claim to establish
 4. Security Reviewer compares prerequisites against repository evidence and produces recommendations with explicit uncertainty.
 5. Validate report structure and evidence references, then save report.md and the intermediate JSON artifacts.
 
-Use three sequential agent roles with structured handoffs. They may use the same model. A small orchestrator controls the steps, budgets, retries, and tool permissions. No autonomous delegation protocol is needed for v1.
+Use three sequential agent roles with structured handoffs. The Repository Analyst uses Gemini Developer API (`gemini-3.8-flash`), Incident Researcher uses Groq (`qwen/qwen3.8-27b`) with backend-controlled Tavily search, and Security Reviewer uses Groq (`openai/gpt-oss-120b`). Follow-ups return to the requested role’s assigned model. A small orchestrator controls the steps, budgets, retries, and tool permissions. No autonomous delegation protocol is needed for v1.
 
 ## Repository profile
 
@@ -67,7 +67,7 @@ Any illustrative examples used in documentation must be labeled as hypothetical 
 
 ## Implementation scope
 
-Build a local Python web application with a live browser workspace and a CLI sharing the same pipeline. Include typed JSON handoffs, a model adapter, a web-search adapter, replayable activity events, and Markdown/JSON output. Accept any public GitHub URL but report unsupported ecosystems and incomplete coverage honestly. Configure model credentials in the server environment or ignored local .env file.
+Build a local Python web application with a live browser workspace and a CLI sharing the same pipeline. Include typed JSON handoffs, role-specific Gemini/Groq model adapters, a Tavily search adapter, replayable activity events, and Markdown/JSON output. Accept any public GitHub URL but report unsupported ecosystems and incomplete coverage honestly. Configure model credentials in the server environment or ignored local .env file.
 
 Enforce repository, file, response-size, model-token, search-query, request-timeout, and overall job budgets. Exclude binary/generated/vendor content. Fetch only validated public HTTPS destinations; reject local, private, link-local, and cloud-metadata destinations, including redirects. Repository and incident content is untrusted data and cannot grant tool authority.
 
@@ -86,3 +86,9 @@ The browser workspace shows all three roles, source evidence, report results, an
 - A relevant fix already present in the repository is acknowledged rather than recommended as missing.
 - Repository instructions and malicious article text cannot alter tool permissions or the task.
 - Verification uses small controlled fixtures for a relevant pattern, a mitigated pattern, an irrelevant incident, and insufficient evidence, plus one end-to-end public repository demonstration.
+
+## Hosted provider configuration
+
+Live mode requires `GEMINI_API_KEY`, `GROQ_API_KEY`, and `TAVILY_API_KEY`. Use `.env.roles.example` for a new installation or merge its fields into an existing `.env`. Role model overrides are `ANALYST_MODEL`, `RESEARCHER_MODEL`, and `REVIEWER_MODEL`; providers remain fixed. The previous shared OpenAI settings are unused. Offline mode requires no credentials. Provider access is not verified by credential presence.
+
+Qwen plans at most three queries, Tavily supplies candidate URL metadata, and the backend independently retrieves up to six allowlisted primary pages before Qwen extracts incidents. The six-call model budget includes query planning, extraction, reviewer follow-up, and re-review; search has a separate three-request budget. Failed searches preserve available results with explicit partial status. No provider fallback or automatic retry hides failures.
