@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 from .agents import ModelClient, analyze_repository, research_incidents, review_security, answer_followup
-from .config import MAX_JOB_SECONDS, MODEL
+from .config import MAX_JOB_SECONDS, ROLE_MODELS, missing_credentials
 from .demo import fixture
 from .evidence import render_report, validate_profile, validate_research, validate_review
 from .repository import inspect_repo
@@ -58,6 +58,8 @@ class Runner:
                 return
             client = ModelClient(emit, checkpoint)
             demo = job['mode'] == 'demo'
+            if not demo and missing_credentials():
+                raise ValueError('Live analysis needs ' + ', '.join(missing_credentials()) + '. Configure .env and restart.')
             fixtures = fixture() if demo else None
             begin('prepare', 'Loading a labeled synthetic fixture' if demo else 'Reading a bounded, immutable public repository snapshot')
             repo = fixtures[0] if demo else inspect_repo(job['repository_url'], emit, checkpoint)
@@ -87,7 +89,8 @@ class Runner:
             if demo:
                 time.sleep(self.demo_delay)
             finish('researcher', research, 'research')
-            if not research['sources'] or any('Source unavailable:' in x for x in research['research_limitations']):
+            if not research['sources'] or any(x.startswith(('Source unavailable:', 'Search unavailable:', 'Incident research incomplete:'))
+                                              for x in research['research_limitations']):
                 store.stage(job_id, 'researcher', 'partial')
 
             begin('reviewer', 'Comparing prerequisites, checking counterevidence, and identifying uncertainty')
@@ -122,7 +125,11 @@ class Runner:
             validation = {'checks': ['Repository quote and line-range integrity', 'Incident passage integrity',
                                       'Recommendation evidence references', 'Date normalization and recency labels'],
                           'warnings': warnings, 'model_calls': client.calls, 'tokens': client.tokens,
-                          'model': 'No model — synthetic offline fixture' if demo else MODEL,
+                          'model': 'No model — synthetic offline fixture' if demo else '; '.join(
+                              f"{role}: {s['provider']}/{s['model']}" for role, s in ROLE_MODELS.items()),
+                          'models': {} if demo else {role: dict(s) for role, s in ROLE_MODELS.items()},
+                          'role_usage': client.role_usage, 'search_calls': client.search_calls,
+                          'search_provider': 'none' if demo else 'tavily',
                           'semantic_limit': 'Reference integrity checks do not independently prove semantic correctness.'}
             finish('validation', validation, 'validation')
             report = render_report(repo, profile, research, review, warnings, demo)
