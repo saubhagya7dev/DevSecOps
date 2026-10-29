@@ -1,7 +1,6 @@
 """Loopback-only local API and static UI, using the Python standard library."""
 import json
 import mimetypes
-import os
 import re
 import secrets
 import threading
@@ -9,7 +8,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
-from .config import MODEL, ROOT
+from .config import ROOT, missing_credentials, provider_configuration
 from .demo import DEMO_URL
 from .pipeline import Runner
 from .repository import parse_repo
@@ -59,7 +58,7 @@ def make_handler(store, runner, token):
                 return self.send(403, {'error': 'Only same-origin loopback requests are allowed.'})
             route = urlsplit(self.path)
             if route.path == '/api/config':
-                return self.send(200, {'live_ready': bool(os.getenv('OPENAI_API_KEY')), 'model': MODEL,
+                return self.send(200, {**provider_configuration(),
                                        'token': token, 'demo_url': DEMO_URL})
             if route.path == '/api/jobs':
                 return self.send(200, store.list())
@@ -127,8 +126,8 @@ def make_handler(store, runner, token):
                     if not isinstance(repo, str):
                         raise ValueError('Repository URL must be text.')
                     owner, name = parse_repo(repo)
-                    if mode == 'live' and not os.getenv('OPENAI_API_KEY'):
-                        return self.send(409, {'error': 'Set OPENAI_API_KEY in .env and restart the server to enable live analysis. The offline example is available now.'})
+                    if mode == 'live' and missing_credentials():
+                        return self.send(409, {'error': 'Set ' + ', '.join(missing_credentials()) + ' in .env and restart the server. The offline example is available now.'})
                     days = data.get('days', 180)
                     if type(days) is not int or not 7 <= days <= 730:
                         raise ValueError('Research window must be between 7 and 730 days.')
@@ -162,7 +161,8 @@ def serve(port=8765):
     server = ThreadingHTTPServer(('127.0.0.1', port), handler)
     server.daemon_threads = True
     print(f'DevSecOps is running at http://127.0.0.1:{server.server_port}', flush=True)
-    print('Live analysis configured.' if os.getenv('OPENAI_API_KEY') else 'Offline example available. Set OPENAI_API_KEY in .env for live analysis.', flush=True)
+    print('Live analysis configured.' if not missing_credentials() else
+          'Offline example available. Configure ' + ', '.join(missing_credentials()) + ' in .env for live analysis.', flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
