@@ -114,7 +114,8 @@ def get_json(url, **kwargs):
 
 
 SECRET = re.compile(
-    r'(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{15,}|github_pat_[A-Za-z0-9_]{15,}'
+    r'(?:sk-[A-Za-z0-9_-]{16,}|gsk_[A-Za-z0-9_-]{16,}|tvly-[A-Za-z0-9_-]{16,}'
+    r'|AIza[A-Za-z0-9_-]{30,}|gh[pousr]_[A-Za-z0-9]{15,}|github_pat_[A-Za-z0-9_]{15,}'
     r'|AKIA[A-Z0-9]{16}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'
     r'|(?:api[_-]?key|password|secret|access[_-]?token)\s*[=:]\s*[\"\'][^\"\'\n]{8,}[\"\'])', re.I)
 
