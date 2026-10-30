@@ -9,13 +9,23 @@ from devsecops.contracts import FOLLOWUP
 from devsecops.demo import fixture
 from devsecops.network import FetchError, upstream_error
 from devsecops.providers import ModelClient
-from tests.test_review import TEST_KEYS, groq_response
+from tests.test_review import MemoryCache, TEST_KEYS, groq_response
 
 ANSWER = {'answer': 'Unknown', 'evidence_ids': [], 'incident_ids': [], 'unknowns': []}
 
 
 @patch.dict(os.environ, TEST_KEYS)
 class RateLimitTests(unittest.TestCase):
+    def setUp(self):
+        pacing = patch("devsecops.providers.RESEARCH_PACER")
+        pacing.start()
+        self.addCleanup(pacing.stop)
+        quota = patch("devsecops.providers.RESEARCHER_TOKEN_BUDGET", 8000)
+        quota.start()
+        self.addCleanup(quota.stop)
+        cache = patch("devsecops.incident_research.ResearchCache", side_effect=MemoryCache)
+        cache.start()
+        self.addCleanup(cache.stop)
     @patch('devsecops.providers.time.monotonic', side_effect=[0, 1])
     @patch('devsecops.providers.get_json')
     def test_short_transient_429_is_retried_once_without_extra_logical_call(self, request, clock):
@@ -52,7 +62,7 @@ class RateLimitTests(unittest.TestCase):
 
     @patch('devsecops.providers.get_json')
     def test_oversized_local_payload_is_blocked_before_request(self, request):
-        with self.assertRaisesRegex(ValueError, 'context budget'):
+        with self.assertRaisesRegex(ValueError, 'context budget|token allowance'):
             ModelClient(lambda *args: None, lambda: None).call('researcher', 'Answer', {'text': 'x' * 18000}, FOLLOWUP)
         request.assert_not_called()
 
@@ -90,7 +100,7 @@ class RateLimitTests(unittest.TestCase):
     @patch('devsecops.agents.fetch')
     def test_extraction_failure_retains_fetched_sources_and_error(self, page):
         _, profile, research, _ = fixture()
-        url = 'https://www.cisa.gov/report'
+        url = 'https://www.cisa.gov/news-events/cybersecurity-advisories/aa-fixture'
         page.return_value = (research['sources'][0]['text'].encode(), 'text/plain', url)
         client = Mock()
         client.search_calls = 0
@@ -128,10 +138,18 @@ class RateLimitTests(unittest.TestCase):
         self.assertIsNone(error.requested_tokens)
         self.assertNotIn('1194 tokens', str(error))
 
+    def test_transient_503_preserves_retry_after_without_exposing_body(self):
+        response = Mock(status=503)
+        response.getheader.return_value = '4'
+        error = upstream_error(response)
+        self.assertEqual(error.status, 503)
+        self.assertEqual(error.retry_after, 4)
+        response.read.assert_not_called()
+
     @patch('devsecops.agents.fetch')
     def test_external_incident_extraction_receives_sources_without_target_profile(self, page):
         _, profile, research, _ = fixture()
-        url = 'https://www.cisa.gov/report'
+        url = 'https://www.cisa.gov/news-events/cybersecurity-advisories/aa-fixture'
         page.return_value = (research['sources'][0]['text'].encode(), 'text/plain', url)
         client = Mock()
         client.search_calls = 0
