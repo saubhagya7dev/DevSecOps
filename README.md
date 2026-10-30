@@ -153,7 +153,9 @@ Then restart `python run.py` and refresh the browser.
 | `ANALYST_MODEL` | No | Gemini model; defaults to `gemini-3.8-flash`. |
 | `RESEARCHER_MODEL` | No | Groq model; defaults to `qwen/qwen3.8-27b`. |
 | `REVIEWER_MODEL` | No | Groq model; defaults to `openai/gpt-oss-120b`. |
-| `GITHUB_TOKEN` | No | Public GitHub API authentication, useful when unauthenticated rate limits constrain a review. |
+| `GITHUB_TOKEN` | No | Public GitHub API authentication; required for optional VCDB code-search discovery. |
+| `RESEARCHER_TOKEN_BUDGET` | No | Conservative input-plus-output allowance; defaults to `1000`. Raise only after verifying account quota. |
+| `ENABLE_VCDB` | No | Set `1` for bounded official historical-record discovery; defaults to `0`. |
 | `PORT` | No | Local HTTP port; defaults to `8765`. The `--port` flag overrides it. |
 
 Existing environment variables take precedence over `.env` values. Provider access, model compatibility, and billing are not verified merely because a key is configured.
@@ -225,6 +227,7 @@ The current search allowlist covers:
 
 | Source | Research context |
 | --- | --- |
+| [The DFIR Report](https://thedfirreport.com/) | Individual technical intrusion reports. |
 | [CISA](https://www.cisa.gov/news-events/cybersecurity-advisories) | Technical advisories and observed campaigns. |
 | [Google Threat Intelligence / Mandiant](https://cloud.google.com/blog/topics/threat-intelligence) | Technical incident investigations and threat research. |
 | [Microsoft Security](https://www.microsoft.com/en-us/security/blog/) | Identity, cloud, application, and supply-chain attack analyses. |
@@ -236,11 +239,13 @@ The current search allowlist covers:
 | [JFrog Security Research](https://research.jfrog.com/) | Original software supply-chain and malicious-package research. |
 | [Wiz Research](https://www.wiz.io/blog) | Original cloud and software supply-chain incident analysis. |
 
-Qwen first generates up to two bounded search queries. The backend submits them to Tavily with the primary-source domain allowlist and publication-window dates. If no eligible candidates remain, one reserved query broadens the search without a date filter; older and undated results remain explicitly labeled. Candidates are interleaved across queries. Weekly vulnerability indexes, community answers, and product tutorials are excluded from incident discovery. Candidate URLs come only from **Tavily result metadata**. URLs merely written in model-generated prose are ignored. The backend independently retrieves eligible pages before they can support an incident record, and checks that the cited passage exists in the fetched text.
+Qwen first generates up to two bounded search queries. The backend submits them to Tavily with the primary-source domain allowlist and publication-window dates. If no useful evidence survives retrieval or quote-validated extraction, one reserved deterministic query broadens the search without a date filter; older and undated results remain explicitly labeled. Candidates are interleaved across queries. Weekly vulnerability indexes, community answers, and product tutorials are excluded from incident discovery. Candidate URLs come from **Tavily metadata and Python-normalized official advisory/knowledge references**. URLs merely written in model-generated prose are ignored. The backend independently retrieves eligible pages before they can support an incident record, and checks that the cited passage exists in the fetched text.
 
 Article/main content is preferred over navigation. Full fetched text is retained up to the per-page context bound, while incident extraction receives selected contiguous passages totaling at most **6,000 characters** across sources. Extraction receives source passages without the target profile, so missing proof of target compromise cannot be used to discard a documented external incident. Repository relevance and prerequisites are assessed separately by the Reviewer. Accepted quotes must still match the retained source text. The reviewer receives at most four accepted incident summaries and sixteen compact repository observations, rather than full HTML-page text. These context bounds can omit relevant details and are recorded as limitations.
 
 The default research window is **180 days by publication date**. Publication date, incident date, and retrieval timestamp remain separate. Older and undated material is explicitly labeled; an advisory is not automatically an observed attack, and a useful campaign need not name its victims.
+
+Structured discovery adds OSV and GitHub global advisories, official MITRE ATT&CK normalization, and optional historical VCDB discovery. Advisory records, technique candidates, historical records, and observed incidents remain distinct. See [incident discovery configuration, budgets, caching, and evidence rules](docs/incident-discovery.md).
 
 ### 3. Review the connection
 
@@ -298,6 +303,7 @@ flowchart TB
         GEMINI["Gemini Developer API<br/>Repository Analyst"]
         GROQ["Groq Chat Completions<br/>Researcher + Reviewer"]
         TAVILY["Tavily Search API<br/>Primary-source discovery"]
+        DISCOVERY["OSV / GitHub advisories<br/>MITRE STIX / optional VCDB"]
         SOURCES["Primary-source pages"]
     end
 
@@ -306,6 +312,7 @@ flowchart TB
     READER --> GEMINI
     READER --> GROQ
     READER --> TAVILY
+    READER --> DISCOVERY
     READER --> SOURCES
 
     classDef local fill:#24211d,stroke:#b59b77,color:#f5f0e8
@@ -437,7 +444,7 @@ Live analysis sends inspected public source excerpts to Google Gemini, the accep
 
 The optional GitHub token is used for GitHub API requests; it is not passed as model context or sent to incident-report sites.
 
-Runtime data lives in the ignored `.devsecops/reviews.sqlite3` file. The frontend uses local scripts, styles, and system fonts without external CDNs. There is no automatic retention policy in this MVP.
+Runtime data lives in the ignored `.devsecops/reviews.sqlite3` file; the bounded 24-hour discovery cache lives in `.devsecops/research-cache/`. The frontend uses local scripts, styles, and system fonts without external CDNs. There is no automatic retention policy in this MVP.
 
 ## Budgets and operational behavior
 
@@ -449,18 +456,20 @@ Runtime data lives in the ignored `.devsecops/reviews.sqlite3` file. The fronten
 | Per-file download | 64,000 bytes |
 | Per-file context | Up to 9,000 characters, retaining complete lines |
 | Total repository context | Up to 100,000 characters |
-| Primary pages fetched | Up to six |
+| Primary page fetch attempts | Up to six; failed candidates can be replaced within this ceiling |
 | Per-page download | Up to 8,000,000 bytes, HTML/text only |
 | Per-page stored context | Up to 18,000 characters |
 | Total source text sent for extraction | Up to 6,000 characters, selected contiguous passages |
 | Groq request body | At most 18,000 UTF-8 bytes; a conservative size guard, not a tokenizer |
 | Tavily search requests | Up to three; each returns at most six candidates |
 | Model calls | Up to six, including an optional follow-up and re-review |
+| Structured API/dataset requests | Up to twelve total, including retries; at most two bounded dataset downloads |
+| Researcher token allowance | 1,000 conservative estimated tokens including schema/instructions and reserved output; configure only after verifying account quota |
 | Model output | Analyst: 6,500; query planning: 700; Groq extraction/review: 2,300; follow-up: 1,000 |
 | Model HTTP attempts | Up to nine: six logical calls plus at most three retries |
 | Job deadline | 900 seconds, checked between operations |
 
-Defaults live in [config.py](devsecops/config.py), with request limits in [providers.py](devsecops/providers.py) and source selection in [agents.py](devsecops/agents.py). Increasing budgets changes coverage, latency, and potential provider cost.
+Defaults live in [config.py](devsecops/config.py), with request limits in [providers.py](devsecops/providers.py) and source selection in [incident_research.py](devsecops/incident_research.py). Increasing budgets changes coverage, latency, and potential provider cost.
 
 **Cancellation is cooperative.** An in-flight network/model request can finish after cancellation is requested, and a provider charge may already have occurred.
 
@@ -483,7 +492,7 @@ python -m compileall -q devsecops run.py
 node --check web/app.js
 ```
 
-The current suite contains **56 test cases** covering:
+The current suite contains **85 test cases** covering:
 
 - Citation rejection, evidence-reference integrity, date handling, and unknowns.
 - Retention of existing defenses and rejected matches in controlled fixtures.
@@ -496,12 +505,18 @@ The current suite contains **56 test cases** covering:
 
 API tests need permission to open and connect to loopback sockets. Temporary test data stays under ignored `test-output/`.
 
-**Verification scope:** all 56 tests pass after the hosted-provider migration, including the complete mocked Gemini/Groq/Tavily workflow and bounded follow-up. Earlier checks exercised the browser workflow, downloads, responsive layout, and public GitHub ingestion. Live API smoke checks are separate from a complete repository review; run `--check-apis` to verify your effective configuration. The screenshots and included example report use offline fixtures. These checks are not a live-provider benchmark, a security audit, or evidence that generated recommendations are always correct.
+**Verification scope:** all 85 tests pass after the structured-discovery update, including the complete mocked Gemini/Groq/Tavily workflow and bounded follow-up. Earlier checks exercised the browser workflow, downloads, responsive layout, and public GitHub ingestion. Live API smoke checks are separate from a complete repository review; run `--check-apis` to verify your effective configuration. The screenshots and included example report use offline fixtures. These checks are not a live-provider benchmark, a security audit, or evidence that generated recommendations are always correct.
 
 ### Project structure
 
 ```text
 DevSecOps/
+│   ├── cache.py           Bounded expiring discovery and extraction cache
+│   ├── packages.py        Static package inventory and version uncertainty
+│   ├── discovery.py       OSV and GitHub advisory adapters
+│   ├── knowledge.py       Official ATT&CK and optional VCDB normalization
+│   ├── sources.py         Individual technical-report eligibility
+│   ├── incident_research.py  Ranked discovery and bounded fallback
 ├── devsecops/
 │   ├── context.py         Bounded evidence views for hosted models
 │   ├── providers.py       Gemini, Groq, and Tavily adapters
