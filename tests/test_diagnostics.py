@@ -15,7 +15,7 @@ class DiagnosticTests(unittest.TestCase):
 
     def configure(self, client, github):
         client.return_value.call.side_effect = lambda role, prompt, data, schema, **kwargs: data['expected_response']
-        client.return_value.search.return_value = {'results': [{'url': 'https://www.cisa.gov/known-exploited-vulnerabilities-catalog'}]}
+        client.return_value.search.return_value = {'results': [{'url': 'https://www.cisa.gov/news-events/cybersecurity-advisories/aa-fixture'}]}
         github.return_value = {'full_name': 'octocat/Hello-World'}
 
     @patch('devsecops.diagnostics.get_json')
