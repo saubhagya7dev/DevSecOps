@@ -48,7 +48,7 @@ def check_apis(report=print):
                                  {'expected_response': value}, schema, max_output_tokens=2048)
             if result != value:
                 raise ValueError('API returned JSON, but the expected smoke-test response did not match.')
-            return 'Authentication, inference, and the role JSON contract passed.'
+            return 'Authentication, inference, and the role JSON contract passed for a small request. Full-review token quota is not verified.'
 
         check(f"{role}: {settings['provider']} / {settings['model']}", model_check, settings['credential'])
 
