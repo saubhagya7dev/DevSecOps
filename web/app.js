@@ -83,16 +83,19 @@ function renderOverview(a) {
 function renderIncidents(a) {
   if (!a.research) return empty('Research has not arrived yet', 'Documented attacks and retrieved passages will appear after the Incident Researcher completes its work.', 'search');
   const r = a.research, sources = Object.fromEntries(r.sources.map(s => [s.id, s]));
+  const failed = r.status === 'failed' || r.research_limitations.some(x => x.startsWith('Incident research incomplete:'));
   return (r.incidents.map(i => {
     const source = sources[i.source_id];
     return `<article class="incident-card"><div class="finding-top"><span class="tag">${esc(i.id)}</span><span class="tag">${esc(i.source_type)}</span><span class="tag ${i.recency === 'Recent report' ? 'green' : 'amber'}">${esc(i.recency)}</span></div><h3>${esc(i.title)}</h3><p>${esc(i.mechanism)}</p><div class="incident-meta"><span>Published ${esc(i.publication_date)}</span><span>·</span><span>Incident ${esc(i.incident_date)}</span></div><p>Victim: ${esc(i.victim)}</p><blockquote>${esc(i.source_quote)}</blockquote><p><strong>Prerequisites:</strong> ${esc(i.prerequisites.join(' · '))}</p>${link(source.url, source.title, 'source-link')}<p class="muted">Retrieved: ${esc(source.retrieved_at)}</p></article>`;
-  }).join('') || empty('No supported incident matches', 'This does not establish that the project is safe. Relevant reports may be unavailable or outside the inspected evidence.', 'search')) +
+  }).join('') || empty(failed ? 'Incident research failed' : 'No supported incident matches', failed ? 'A provider request failed. This is an incomplete investigation, not a finding that no attacks exist. Resolve the error below and start a new run.' : 'This does not establish that the project is safe. Relevant reports may be unavailable or outside the inspected evidence.', 'search')) +
   (r.research_limitations.length ? `<h3 class="subheading">Research limitations</h3><ul class="unknown-list">${r.research_limitations.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '');
 }
 
 function renderRecommendations(a) {
   if (!a.review) return empty('Recommendations follow the evidence', 'The Security Reviewer checks incident prerequisites against repository observations, including existing defenses.', 'shield-check');
   const r = a.review;
+  const researchFailed = a.research?.status === 'failed' || a.research?.research_limitations.some(x => x.startsWith('Incident research incomplete:'));
+  if (r.status === 'skipped' || (researchFailed && !r.findings.length)) return empty('Security review was not performed', researchFailed ? 'Incident research failed, so the reviewer had no validated incident evidence. Fix the research error and start a new run. This result says nothing about repository safety.' : r.summary, 'shield') + (r.reason ? `<p class="note">${esc(r.reason)}</p>` : '');
   return `<p class="summary">${esc(r.summary)}</p>` + (r.findings.map(f => `<article class="finding-card"><div class="finding-top"><span class="tag ${f.classification === 'Supported concern' ? 'green' : 'amber'}">${esc(f.classification)}</span><span class="tag">${esc(f.impact)} impact</span><span class="tag">${esc(f.confidence)} confidence</span></div><h3>${esc(f.title)}</h3><p>${esc(f.reasoning)}</p><dl><dt>Attack prerequisite</dt><dd>${esc(f.prerequisite)}</dd><dt>Counterevidence</dt><dd>${esc(f.counterevidence)}</dd><dt>Recommended action</dt><dd>${esc(f.action)}</dd><dt>How to verify</dt><dd>${esc(f.verification)}</dd><dt>Still unknown</dt><dd>${esc(f.missing_information.join(' · ') || 'None identified within this evidence.')}</dd></dl><div class="citation-links">${evidenceLinks(f.evidence_ids)}${f.incident_ids.map(id => `<a href="#" data-incident="${esc(id)}">${esc(id)} ${icon('arrow-up-right')}</a>`).join('')}</div></article>`).join('') || empty('No evidence-backed recommendations established', 'The reviewer could not establish a defensible repository–incident connection. This is a valid result, not a security clearance.', 'shield')) +
   (r.existing_defenses.length ? `<h3 class="subheading">Existing defenses acknowledged</h3>${r.existing_defenses.map(d => `<p class="note">${esc(d.description)}</p><div class="citation-links">${evidenceLinks(d.evidence_ids)}</div>`).join('')}` : '') +
   (r.rejected_matches.length ? `<h3 class="subheading">Connections rejected</h3>${r.rejected_matches.map(m => `<p class="note">${esc(m.incident_id)} · ${esc(m.reason)}</p>`).join('')}` : '') +
@@ -128,7 +131,7 @@ function renderJob() {
   const a = current?.artifacts || {}, active = current && !terminal.has(current.status);
   document.body.classList.toggle('has-review', Boolean(current));
   $('review-title').textContent = current ? current.mode === 'demo' ? 'Preview service · offline example' : current.repository_url.replace('https://github.com/', '') : 'Your next review starts here';
-  $('job-state').textContent = current ? ({queued:'In queue',running:'In progress',cancelling:'Cancelling',completed:'Review complete',partial:'Complete · limitations',failed:'Analysis stopped',cancelled:'Cancelled'}[current.status]) : 'Ready when you are';
+  $('job-state').textContent = current ? ({queued:'In queue',running:'In progress',cancelling:'Cancelling',completed:'Review complete',partial:'Incomplete · limitations',failed:'Analysis stopped',cancelled:'Cancelled'}[current.status]) : 'Ready when you are';
   $('job-state').className = `job-state ${current?.status || ''}`;
   $('example-banner').hidden = current?.mode !== 'demo';
   $('job-error').hidden = !current?.error; $('job-error').textContent = current?.error || '';
