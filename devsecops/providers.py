@@ -2,6 +2,7 @@
 import json
 import os
 import re
+import time
 
 from . import contracts
 from .config import ROLE_MODELS
@@ -21,17 +22,20 @@ class ModelClient:
         self.emit, self.checkpoint = emit, checkpoint
         self.calls, self.tokens, self.search_calls = 0, 0, 0
         self.role_usage = {}
+        self.request_attempts, self.retries = 0, 0
 
-    def call(self, role, instructions, data, schema, *, max_output_tokens=6500):
+    def call(self, role, instructions, data, schema, *, max_output_tokens=None):
         self.checkpoint()
         if role not in ROLE_MODELS:
             raise ValueError('Unknown model role.')
         if self.calls >= 6:
             raise ValueError('Model call budget exhausted.')
-        if type(max_output_tokens) is not int or not 1 <= max_output_tokens <= 6500:
-            raise ValueError('Model output budget must be between 1 and 6500 tokens.')
         settings = ROLE_MODELS[role]
         provider, model = settings['provider'], settings['model']
+        if max_output_tokens is None:
+            max_output_tokens = 6500 if provider == 'gemini' else 2300
+        if type(max_output_tokens) is not int or not 1 <= max_output_tokens <= 6500:
+            raise ValueError('Model output budget must be between 1 and 6500 tokens.')
         key = os.getenv(settings['credential'], '').strip()
         if not key:
             raise ValueError(f"Live {role} needs {settings['credential']} in your server environment or .env file.")
@@ -56,12 +60,35 @@ class ModelClient:
                        'messages': [{'role': 'system', 'content': instructions}, {'role': 'user', 'content': text}],
                        'response_format': {'type': 'json_schema', 'json_schema': {
                            'name': role + '_handoff', 'strict': True, 'schema': schema}}}
-        try:
-            response = get_json(url, headers=headers, body=json.dumps(payload).encode('utf-8'),
-                                timeout=180, limit=2_000_000)
-        except FetchError as exc:
-            raise ValueError(f'{role} ({provider}, {model}) request failed: {exc} '
-                             'Check model access, credentials, quota, and network connectivity.') from exc
+        body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+        if provider == 'groq' and len(body) > 18000:
+            raise ValueError(f'{role} request exceeds the local 18,000-byte Groq context budget. '
+                             'Reduce evidence context; retrying an oversized request will not fix it.')
+        for attempt in range(2):
+            self.request_attempts += 1
+            try:
+                response = get_json(url, headers=headers, body=body, timeout=180, limit=2_000_000)
+                break
+            except FetchError as exc:
+                oversized = (exc.requested_tokens is not None and exc.token_limit is not None
+                             and exc.requested_tokens > exc.token_limit)
+                retryable = (exc.status == 429 and not exc.daily_limit and not oversized
+                             and exc.retry_after is not None and exc.retry_after <= 60)
+                if retryable and attempt == 0 and self.retries < 3:
+                    self.retries += 1
+                    delay = exc.retry_after + 0.5
+                    self.emit(role, 'Rate limited; waiting to retry', f'{provider} · waiting {delay:g}s; one retry for this request')
+                    deadline = time.monotonic() + delay
+                    while time.monotonic() < deadline:
+                        self.checkpoint()
+                        time.sleep(min(0.25, max(0, deadline - time.monotonic())))
+                    self.checkpoint()
+                    continue
+                action = ('Reduce request context or use a higher token limit; this request cannot fit the current limit.'
+                          if oversized else 'Daily quota exhausted; wait for reset or change the provider plan.'
+                          if exc.daily_limit else 'Rate limit persists. Wait for quota reset and check the provider Limits page.'
+                          if exc.status == 429 else 'Check model access, credentials, quota, and network connectivity.')
+                raise ValueError(f'{role} ({provider}, {model}) request failed: {exc} {action}') from exc
         self.checkpoint()
         try:
             if provider == 'gemini':
