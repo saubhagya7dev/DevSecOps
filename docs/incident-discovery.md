@@ -85,7 +85,7 @@ Before each researcher request, the serialized JSON body is measured and input t
 
 Oversized views are rebuilt locally by removing lower-priority sources/passages and optional technique context, without changing source IDs or stored evidence. If instructions/schema alone cannot fit, the request is stopped **before transmission**. Planning falls back to deterministic discovery; blocked extraction preserves sources and structured records in a clearly partial result. Raise the allowance only after verifying that the account actually permits it. A stronger model's context window does not increase account quota.
 
-HTTP 429 requests larger than the reported token limit, daily quotas, missing reset information, and long waits are not repeatedly retried. The existing model policy permits one retry only for a transient `Retry-After` up to 60 seconds, within the job/retry/token budgets. No model/provider fallback or offline-example substitution occurs.
+HTTP 429 requests larger than the reported token limit, daily quotas, missing reset information, and long waits are not repeatedly retried. The model policy permits one retry for transient HTTP 429 with `Retry-After` up to 60 seconds, or HTTP 503 with a short provider reset or jittered delay. Existing job/retry/token budgets remain in force. See [Gemini availability troubleshooting](gemini-availability.md). No model/provider fallback or offline-example substitution occurs.
 
 ## Fallback and coverage
 
