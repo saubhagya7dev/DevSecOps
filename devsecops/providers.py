@@ -22,12 +22,14 @@ class ModelClient:
         self.calls, self.tokens, self.search_calls = 0, 0, 0
         self.role_usage = {}
 
-    def call(self, role, instructions, data, schema):
+    def call(self, role, instructions, data, schema, *, max_output_tokens=6500):
         self.checkpoint()
         if role not in ROLE_MODELS:
             raise ValueError('Unknown model role.')
         if self.calls >= 6:
             raise ValueError('Model call budget exhausted.')
+        if type(max_output_tokens) is not int or not 1 <= max_output_tokens <= 6500:
+            raise ValueError('Model output budget must be between 1 and 6500 tokens.')
         settings = ROLE_MODELS[role]
         provider, model = settings['provider'], settings['model']
         key = os.getenv(settings['credential'], '').strip()
@@ -45,12 +47,12 @@ class ModelClient:
             headers['x-goog-api-key'] = key
             payload = {'systemInstruction': {'parts': [{'text': instructions}]},
                        'contents': [{'role': 'user', 'parts': [{'text': text}]}],
-                       'generationConfig': {'maxOutputTokens': 6500, 'responseMimeType': 'application/json',
+                       'generationConfig': {'maxOutputTokens': max_output_tokens, 'responseMimeType': 'application/json',
                                             'responseJsonSchema': schema}}
         else:
             url = 'https://api.groq.com/openai/v1/chat/completions'
             headers['Authorization'] = f'Bearer {key}'
-            payload = {'model': model, 'max_completion_tokens': 6500,
+            payload = {'model': model, 'max_completion_tokens': max_output_tokens,
                        'messages': [{'role': 'system', 'content': instructions}, {'role': 'user', 'content': text}],
                        'response_format': {'type': 'json_schema', 'json_schema': {
                            'name': role + '_handoff', 'strict': True, 'schema': schema}}}
@@ -98,8 +100,12 @@ class ModelClient:
         self.search_calls += 1
         self.emit('researcher', 'Searching primary sources', f'Tavily · query {self.search_calls}/3 · {query}')
         payload = {'query': query, 'search_depth': 'basic', 'topic': 'general', 'max_results': 6,
-                   'include_domains': domains, 'start_date': str(since), 'end_date': str(today),
+                   'include_domains': domains,
                    'include_answer': False, 'include_raw_content': False, 'auto_parameters': False}
+        if since is not None:
+            payload['start_date'] = str(since)
+        if today is not None:
+            payload['end_date'] = str(today)
         try:
             response = get_json('https://api.tavily.com/search',
                                 headers={'Authorization': f'Bearer {key}', 'Content-Type': 'application/json'},
