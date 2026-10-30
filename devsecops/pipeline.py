@@ -80,7 +80,7 @@ class Runner:
 
             begin('researcher', f"Researching mechanisms; publication window: {job['days']} days")
             try:
-                research = fixtures[2] if demo else research_incidents(profile, client, emit, checkpoint, job['days'])
+                research = fixtures[2] if demo else research_incidents(profile, client, emit, checkpoint, job['days'], repo=repo)
                 research, rejected = validate_research(research, job['days'], datetime.now(timezone.utc).date())
                 warnings.extend(rejected)
             except (ValueError, OSError) as exc:
@@ -91,28 +91,44 @@ class Runner:
             if demo:
                 time.sleep(self.demo_delay)
             finish('researcher', research, 'research')
-            if not research['sources'] or any(x.startswith(('Source unavailable:', 'Search unavailable:', 'Incident research incomplete:'))
+            if research.get('status') in ('failed', 'partial') or not research['sources'] or any(x.startswith(('Source unavailable:', 'Search unavailable:', 'Incident research incomplete:'))
                                               for x in research['research_limitations']):
                 store.stage(job_id, 'researcher', 'partial')
 
             if research['incidents']:
                 begin('reviewer', 'Comparing prerequisites, checking counterevidence, and identifying uncertainty')
                 review = fixtures[3] if demo else review_security(profile, research, client)
-                if not demo and review.get('followup_requests'):
+                if not demo and review.get('followup_requests') and client.calls <= 4:
                     request = review['followup_requests'][0]
                     target = request['target']
                     emit('reviewer', 'Bounded evidence follow-up', f"{target}: {request['question']}")
                     store.stage(job_id, target, 'running')
-                    answer = answer_followup(request, repo, profile, research, client)
-                    valid_evidence = {o['id'] for o in profile['observations']}
-                    valid_incidents = {i['id'] for i in research['incidents']}
-                    answer['evidence_ids'] = [x for x in answer['evidence_ids'] if x in valid_evidence]
-                    answer['incident_ids'] = [x for x in answer['incident_ids'] if x in valid_incidents]
-                    store.artifact(job_id, 'followup', {'request': request, 'answer': answer})
-                    store.stage(job_id, target, 'completed')
-                    emit(target, 'Follow-up completed', answer['answer'])
-                    review = review_security(profile, research, client, followup=answer)
+                    try:
+                        answer = answer_followup(request, repo, profile, research, client)
+                        valid_evidence = {o['id'] for o in profile['observations']}
+                        valid_incidents = {i['id'] for i in research['incidents']}
+                        answer['evidence_ids'] = [x for x in answer['evidence_ids'] if x in valid_evidence]
+                        answer['incident_ids'] = [x for x in answer['incident_ids'] if x in valid_incidents]
+                        store.artifact(job_id, 'followup', {'request': request, 'answer': answer})
+                        store.stage(job_id, target, 'completed')
+                        emit(target, 'Follow-up completed', answer['answer'])
+                        review = review_security(profile, research, client, followup=answer)
+                        review['followup_requests'] = []
+                    except (ValueError, OSError) as exc:
+                        review['followup_requests'] = []
+                        review['questions'].append('Unresolved follow-up: ' + request['question'])
+                        for finding in review['findings']:
+                            finding['missing_information'].append('Unresolved follow-up: ' + request['question'])
+                            if finding['classification'] == 'Supported concern':
+                                finding['classification'] = 'Needs verification'
+                        store.artifact(job_id, 'followup', {'request': request, 'status': 'failed', 'error': str(exc)})
+                        store.stage(job_id, target, 'partial')
+                        warnings.append(f'Bounded follow-up or re-review incomplete: {exc}. Earlier evidence is retained; the question remains unresolved.')
+                        emit(target, 'Follow-up incomplete', str(exc))
+                elif not demo and review.get('followup_requests'):
+                    review['questions'].extend(request['question'] for request in review['followup_requests'])
                     review['followup_requests'] = []
+                    warnings.append('Reviewer follow-up omitted to preserve the six-call model budget; unresolved questions remain open.')
             else:
                 failed = research.get('status') == 'failed'
                 review = {'summary': 'Security review was not performed because incident research failed. Resolve the research error and start a new run.' if failed else
@@ -135,6 +151,9 @@ class Runner:
                           'models': {} if demo else {role: dict(s) for role, s in ROLE_MODELS.items()},
                           'role_usage': client.role_usage, 'search_calls': client.search_calls,
                           'request_attempts': client.request_attempts, 'rate_limit_retries': client.retries,
+                          'researcher_estimated_tokens': client.estimated_research_tokens,
+                          'context_omissions': client.context_omissions,
+                          'request_contexts': client.request_contexts,
                           'context_limit': 'Incident extraction uses at most 6,000 source-text characters. Reviewer sees at most sixteen observations and four incident summaries; full evidence is retained in artifacts.',
                           'search_provider': 'none' if demo else 'tavily',
                           'semantic_limit': 'Reference integrity checks do not independently prove semantic correctness.'}
