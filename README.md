@@ -160,6 +160,21 @@ Existing environment variables take precedence over `.env` values. Provider acce
 
 **Keep credentials on the server.** Never commit actual keys, add them to a repository URL, or paste them into the interface. The browser receives a configuration flag, not the API key. Live model and search calls incur provider charges; actual cost depends on usage and your provider configuration.
 
+
+### Verify the live APIs
+
+After setting your credentials, run:
+
+```sh
+python run.py --check-apis
+```
+
+This makes three small model requests (one per configured role), one Tavily search, and one GitHub metadata request. It checks authentication, actual model inference, each role's JSON contract, primary-source search results, and GitHub access. Model output is capped at 2,048 tokens per request. Provider charges may apply.
+
+Each integration prints `PASS`, `FAIL`, or `MISSING` with elapsed time. A failure does not prevent the remaining checks. Exit code `0` means all five integrations passed; code `1` means at least one failed or lacks credentials. Keys and raw provider responses are never printed. The command does not start the server or analyze a repository.
+
+The displayed model IDs reflect your effective configuration, including `.env` or environment overrides. The search check deliberately omits publication dates so it can test search access independently of recent-incident coverage. Empty search results are reported explicitly. Passing these checks does not establish full-review quality, future quota availability, or production exposure.
+
 ## How it works
 
 Three specialized roles run sequentially under a deterministic controller. Each has its own hosted model, context, instructions, and JSON contract. Every response is validated locally before the next stage accepts it.
@@ -455,7 +470,7 @@ python -m compileall -q devsecops run.py
 node --check web/app.js
 ```
 
-The current suite contains **40 test cases** covering:
+The current suite contains **44 test cases** covering:
 
 - Citation rejection, evidence-reference integrity, date handling, and unknowns.
 - Retention of existing defenses and rejected matches in controlled fixtures.
@@ -468,7 +483,7 @@ The current suite contains **40 test cases** covering:
 
 API tests need permission to open and connect to loopback sockets. Temporary test data stays under ignored `test-output/`.
 
-**Verification scope:** all 40 tests pass after the hosted-provider migration, including the complete mocked Gemini/Groq/Tavily workflow and bounded follow-up. Earlier checks exercised the browser workflow, downloads, responsive layout, and public GitHub ingestion. No paid live-provider analysis was performed for this migration. The screenshots and included example report use offline fixtures. These checks are not a live-provider benchmark, a security audit, or evidence that generated recommendations are always correct.
+**Verification scope:** all 44 tests pass after the hosted-provider migration, including the complete mocked Gemini/Groq/Tavily workflow and bounded follow-up. Earlier checks exercised the browser workflow, downloads, responsive layout, and public GitHub ingestion. Live API smoke checks are separate from a complete repository review; run `--check-apis` to verify your effective configuration. The screenshots and included example report use offline fixtures. These checks are not a live-provider benchmark, a security audit, or evidence that generated recommendations are always correct.
 
 ### Project structure
 
@@ -476,6 +491,7 @@ API tests need permission to open and connect to loopback sockets. Temporary tes
 DevSecOps/
 ├── devsecops/
 │   ├── providers.py       Gemini, Groq, and Tavily adapters
+│   ├── diagnostics.py     Independent live API smoke checks
 │   ├── agents.py          Three role implementations and source retrieval
 │   ├── contracts.py       Strict JSON schemas and local shape validation
 │   ├── repository.py      Commit-pinned, bounded GitHub reader
