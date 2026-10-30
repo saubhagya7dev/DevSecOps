@@ -45,11 +45,12 @@ class Runner:
             store.stage(job_id, name, 'running')
             emit(name, 'Stage started', detail)
 
-        def finish(name, artifact, key):
+        def finish(name, artifact, key, state='completed'):
             checkpoint()
             store.artifact(job_id, key, artifact)
-            store.stage(job_id, name, 'completed')
-            emit(name, 'Stage completed', f'{key.title()} is available in the evidence panel')
+            store.stage(job_id, name, state)
+            emit(name, 'Stage skipped' if state == 'skipped' else 'Stage completed',
+                 artifact.get('reason', '') if state == 'skipped' else f'{key.title()} is available in the evidence panel')
 
         try:
             checkpoint()
@@ -83,7 +84,8 @@ class Runner:
                 research, rejected = validate_research(research, job['days'], datetime.now(timezone.utc).date())
                 warnings.extend(rejected)
             except (ValueError, OSError) as exc:
-                research = {'incidents': [], 'sources': [], 'research_limitations': [f'Incident research incomplete: {exc}']}
+                research = {'incidents': [], 'sources': [], 'research_limitations': [f'Incident research incomplete: {exc}'],
+                            'status': 'failed', 'error': str(exc)}
                 warnings.append('Incident research failed; no incident-linked recommendations can be established.')
                 emit('researcher', 'Research incomplete', str(exc))
             if demo:
@@ -93,8 +95,8 @@ class Runner:
                                               for x in research['research_limitations']):
                 store.stage(job_id, 'researcher', 'partial')
 
-            begin('reviewer', 'Comparing prerequisites, checking counterevidence, and identifying uncertainty')
             if research['incidents']:
+                begin('reviewer', 'Comparing prerequisites, checking counterevidence, and identifying uncertainty')
                 review = fixtures[3] if demo else review_security(profile, research, client)
                 if not demo and review.get('followup_requests'):
                     request = review['followup_requests'][0]
@@ -112,14 +114,17 @@ class Runner:
                     review = review_security(profile, research, client, followup=answer)
                     review['followup_requests'] = []
             else:
-                review = {'summary': 'No incident-linked recommendations could be established from the retrieved evidence. This is not a declaration of security.',
+                failed = research.get('status') == 'failed'
+                review = {'summary': 'Security review was not performed because incident research failed. Resolve the research error and start a new run.' if failed else
+                          'Security review was skipped because no supported incidents were available. This is not a declaration of security.',
                           'findings': [], 'existing_defenses': [], 'rejected_matches': [],
-                          'questions': ['Review source availability and provide deployment context before drawing security conclusions.'], 'followup_requests': []}
+                          'questions': ['Review source availability and provider limits before drawing security conclusions.'], 'followup_requests': [],
+                          'status': 'skipped', 'reason': research.get('error', 'No supported incident evidence.')}
             review, rejected = validate_review(review, profile, research)
             warnings.extend(rejected)
             if demo:
                 time.sleep(self.demo_delay)
-            finish('reviewer', review, 'review')
+            finish('reviewer', review, 'review', 'completed' if research['incidents'] else 'skipped')
 
             begin('validation', 'Checking evidence references and assembling the cited report')
             validation = {'checks': ['Repository quote and line-range integrity', 'Incident passage integrity',
@@ -129,6 +134,8 @@ class Runner:
                               f"{role}: {s['provider']}/{s['model']}" for role, s in ROLE_MODELS.items()),
                           'models': {} if demo else {role: dict(s) for role, s in ROLE_MODELS.items()},
                           'role_usage': client.role_usage, 'search_calls': client.search_calls,
+                          'request_attempts': client.request_attempts, 'rate_limit_retries': client.retries,
+                          'context_limit': 'Incident extraction uses at most 6,000 source-text characters. Reviewer sees at most sixteen observations and four incident summaries; full evidence is retained in artifacts.',
                           'search_provider': 'none' if demo else 'tavily',
                           'semantic_limit': 'Reference integrity checks do not independently prove semantic correctness.'}
             finish('validation', validation, 'validation')
