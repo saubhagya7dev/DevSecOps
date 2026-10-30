@@ -13,8 +13,15 @@ def main():
     parser.add_argument('--port', type=int, default=int(os.getenv('PORT', '8765')))
     parser.add_argument('--repo', help='Analyze a public GitHub URL directly from the CLI')
     parser.add_argument('--demo', action='store_true', help='Run the clearly labeled synthetic offline example via CLI')
+    parser.add_argument('--check-apis', action='store_true', help='Make small live requests to verify Gemini, both Groq models, Tavily, and GitHub')
     parser.add_argument('--output', default='test-output/report.md')
     args = parser.parse_args()
+    if args.check_apis:
+        if args.repo or args.demo:
+            parser.error('--check-apis cannot be combined with --repo or --demo.')
+        from .diagnostics import check_apis
+        results = check_apis()
+        raise SystemExit(0 if all(result['status'] == 'PASS' for result in results) else 1)
     if not args.repo and not args.demo:
         from .server import serve
         serve(args.port)
