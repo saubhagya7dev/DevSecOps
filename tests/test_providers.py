@@ -10,13 +10,23 @@ from devsecops.network import FetchError, redact
 from devsecops.providers import ModelClient
 from devsecops.agents import research_incidents
 from devsecops.demo import fixture
-from tests.test_review import TEST_KEYS, gemini_response, groq_response
+from tests.test_review import MemoryCache, TEST_KEYS, gemini_response, groq_response
 
 ANSWER = {'answer': 'Unknown', 'evidence_ids': [], 'incident_ids': [], 'unknowns': []}
 
 
 @patch.dict(os.environ, TEST_KEYS)
 class ProviderTests(unittest.TestCase):
+    def setUp(self):
+        pacing = patch("devsecops.providers.RESEARCH_PACER")
+        pacing.start()
+        self.addCleanup(pacing.stop)
+        quota = patch("devsecops.providers.RESEARCHER_TOKEN_BUDGET", 8000)
+        quota.start()
+        self.addCleanup(quota.stop)
+        cache = patch("devsecops.incident_research.ResearchCache", side_effect=MemoryCache)
+        cache.start()
+        self.addCleanup(cache.stop)
     def client(self):
         return ModelClient(lambda *args: None, lambda: None)
 
@@ -125,7 +135,7 @@ class ProviderTests(unittest.TestCase):
     def test_partial_search_failure_preserves_independently_fetched_evidence(self, fetch_page):
         _, profile, research, _ = fixture()
         source = research['sources'][0]
-        url = 'https://www.cisa.gov/report'
+        url = 'https://www.cisa.gov/news-events/cybersecurity-advisories/aa-fixture'
         fetch_page.return_value = (source['text'].encode(), 'text/plain', url)
         client = Mock()
         client.call.side_effect = [
