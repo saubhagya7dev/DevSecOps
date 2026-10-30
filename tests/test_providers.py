@@ -143,6 +143,7 @@ class ProviderTests(unittest.TestCase):
         _, profile, _, _ = fixture()
         client = Mock()
         client.call.return_value = {'queries': ['SSRF campaign']}
+        client.search_calls = 1
         client.search.return_value = {'results': [{'url': 'https://cisa.gov.evil.test/report'}]}
         result = research_incidents(profile, client, lambda *args: None, lambda: None)
         fetch_page.assert_not_called()
