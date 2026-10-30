@@ -10,7 +10,55 @@ from urllib.parse import urljoin, urlsplit
 
 
 class FetchError(ValueError):
-    pass
+    def __init__(self, message, *, status=None, retry_after=None, token_limit=None, requested_tokens=None, daily_limit=False, limit_kind='unknown'):
+        super().__init__(message)
+        self.status, self.retry_after = status, retry_after
+        self.token_limit, self.requested_tokens, self.daily_limit = token_limit, requested_tokens, daily_limit
+        self.limit_kind = limit_kind
+
+
+def upstream_error(response):
+    """Extract rate-limit numbers only; never expose provider bodies or organization IDs."""
+    status = response.status
+    retry_after = token_limit = requested = None
+    daily = False
+    limit_kind = 'unknown'
+    try:
+        value = float(response.getheader('Retry-After', ''))
+        if 0 <= value <= 86400:
+            retry_after = value
+    except (ValueError, TypeError):
+        pass
+    if status == 429:
+        try:
+            body = json.loads(response.read(8192))
+            error = body.get('error', {})
+            message = error.get('message', '') if isinstance(error, dict) else ''
+            if isinstance(message, str):
+                for phrase, kind in [('tokens per minute', 'tokens_per_minute'), ('tokens per day', 'tokens_per_day'),
+                                     ('requests per minute', 'requests_per_minute'), ('requests per day', 'requests_per_day')]:
+                    if phrase in message.lower():
+                        limit_kind = kind
+                        break
+                limit_match = re.search(r'\bLimit\s*[:=]?\s*(\d+)', message, re.I)
+                requested_match = re.search(r'\bRequested\s*[:=]?\s*(\d+)', message, re.I)
+                if limit_kind.startswith('tokens_'):
+                    token_limit = int(limit_match[1]) if limit_match else None
+                    requested = int(requested_match[1]) if requested_match else None
+                daily = bool(re.search(r'tokens per day|requests per day|daily|insufficient.quota', message, re.I))
+        except (ValueError, TypeError, AttributeError, OSError, http.client.HTTPException):
+            pass
+        detail = 'Daily quota exhausted.' if daily else 'Rate limit reached.'
+        if limit_kind != 'unknown':
+            detail += ' ' + limit_kind.replace('_', ' ') + '.'
+        if token_limit and requested:
+            detail += f' Limit {token_limit}; requested {requested} tokens.'
+        if retry_after is not None:
+            detail += f' Retry after {retry_after:g}s.'
+        return FetchError(f'Upstream HTTP 429: {detail}', status=status, retry_after=retry_after,
+                          token_limit=token_limit, requested_tokens=requested, daily_limit=daily, limit_kind=limit_kind)
+    return FetchError(f'Upstream HTTP {status}: check credentials or access.' if status in (401, 403)
+                      else f'Upstream HTTP {status}.', status=status)
 
 
 def public_destination(url):
@@ -73,9 +121,7 @@ def fetch(url, *, headers=None, body=None, limit=2_000_000, timeout=35, redirect
                 url = urljoin(url, location)
                 continue
             if response.status >= 400:
-                if response.status in (401, 403, 429):
-                    raise FetchError(f'Upstream HTTP {response.status}: check credentials, rate limits, or access.')
-                raise FetchError(f'Upstream HTTP {response.status}.')
+                raise upstream_error(response)
             if response.getheader('Content-Encoding', 'identity') != 'identity':
                 raise FetchError('Compressed responses are not supported by this bounded reader.')
             length = response.getheader('Content-Length')
