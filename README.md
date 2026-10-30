@@ -463,9 +463,9 @@ Runtime data lives in the ignored `.devsecops/reviews.sqlite3` file; the bounded
 | Groq request body | At most 18,000 UTF-8 bytes; a conservative size guard, not a tokenizer |
 | Tavily search requests | Up to three; each returns at most six candidates |
 | Model calls | Up to six, including an optional follow-up and re-review |
+| Model output | Analyst: 6,500; query planning: 700; Groq extraction/review: 2,300; follow-up: 1,000 |
 | Structured API/dataset requests | Up to twelve total, including retries; at most two bounded dataset downloads |
 | Researcher token allowance | 1,000 conservative estimated tokens including schema/instructions and reserved output; configure only after verifying account quota |
-| Model output | Analyst: 6,500; query planning: 700; Groq extraction/review: 2,300; follow-up: 1,000 |
 | Model HTTP attempts | Up to nine: six logical calls plus at most three retries |
 | Job deadline | 900 seconds, checked between operations |
 
@@ -511,13 +511,13 @@ API tests need permission to open and connect to loopback sockets. Temporary tes
 
 ```text
 DevSecOps/
+├── devsecops/
 │   ├── cache.py           Bounded expiring discovery and extraction cache
 │   ├── packages.py        Static package inventory and version uncertainty
 │   ├── discovery.py       OSV and GitHub advisory adapters
 │   ├── knowledge.py       Official ATT&CK and optional VCDB normalization
 │   ├── sources.py         Individual technical-report eligibility
 │   ├── incident_research.py  Ranked discovery and bounded fallback
-├── devsecops/
 │   ├── context.py         Bounded evidence views for hosted models
 │   ├── providers.py       Gemini, Groq, and Tavily adapters
 │   ├── diagnostics.py     Independent live API smoke checks
