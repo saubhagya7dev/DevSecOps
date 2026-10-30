@@ -475,7 +475,7 @@ Defaults live in [config.py](devsecops/config.py), with request limits in [provi
 
 A failed extraction retains retrieved sources and the provider error in the partial report. If no accepted incidents are available, the reviewer is marked **skipped**, rather than completed. The UI distinguishes research failure from a completed search with no supported matches.
 
-A model request receiving HTTP 429 is retried at most once only when the provider supplies a `Retry-After` of at most 60 seconds. There are at most three retries per job; waits check cancellation. Requests larger than the reported token limit, daily quotas, missing reset information, and longer waits fail explicitly. Provider error bodies and organization IDs are not displayed; only safe status and rate-limit numbers are extracted. Byte limits and small output budgets cannot guarantee a fit for every account’s token quota.
+A model request receiving HTTP 429 is retried at most once only when the provider supplies a `Retry-After` of at most 60 seconds. HTTP 503 also receives at most one retry, honoring a short reset or using a 1–3 second jittered wait when no reset is supplied. See [Gemini availability diagnostics](docs/gemini-availability.md). There are at most three retries per job; waits check cancellation. Requests larger than the reported token limit, daily quotas, missing reset information, and longer waits fail explicitly. Provider error bodies and organization IDs are not displayed; only safe status and rate-limit numbers are extracted. Byte limits and small output budgets cannot guarantee a fit for every account’s token quota.
 
 A successful `--check-apis` smoke test confirms small-request access. It does **not** establish that full repository workloads fit your account’s token-per-minute/day limits. Check the [Groq Limits page](https://console.groq.com/settings/limits) and [rate-limit documentation](https://console.groq.com/docs/rate-limits) if throttling persists. A request larger than a model’s entire per-minute allowance cannot succeed just by waiting; raise that allowance or explicitly configure another compatible model.
 
@@ -492,7 +492,7 @@ python -m compileall -q devsecops run.py
 node --check web/app.js
 ```
 
-The current suite contains **85 test cases** covering:
+The current suite contains **90 test cases** covering:
 
 - Citation rejection, evidence-reference integrity, date handling, and unknowns.
 - Retention of existing defenses and rejected matches in controlled fixtures.
@@ -505,7 +505,7 @@ The current suite contains **85 test cases** covering:
 
 API tests need permission to open and connect to loopback sockets. Temporary test data stays under ignored `test-output/`.
 
-**Verification scope:** all 85 tests pass after the structured-discovery update, including the complete mocked Gemini/Groq/Tavily workflow and bounded follow-up. Earlier checks exercised the browser workflow, downloads, responsive layout, and public GitHub ingestion. Live API smoke checks are separate from a complete repository review; run `--check-apis` to verify your effective configuration. The screenshots and included example report use offline fixtures. These checks are not a live-provider benchmark, a security audit, or evidence that generated recommendations are always correct.
+**Verification scope:** all 90 tests pass after the structured-discovery update, including the complete mocked Gemini/Groq/Tavily workflow and bounded follow-up. Earlier checks exercised the browser workflow, downloads, responsive layout, and public GitHub ingestion. Live API smoke checks are separate from a complete repository review; run `--check-apis` to verify your effective configuration. The screenshots and included example report use offline fixtures. These checks are not a live-provider benchmark, a security audit, or evidence that generated recommendations are always correct.
 
 ### Project structure
 
