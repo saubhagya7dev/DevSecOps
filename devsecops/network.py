@@ -58,7 +58,7 @@ def upstream_error(response):
         return FetchError(f'Upstream HTTP 429: {detail}', status=status, retry_after=retry_after,
                           token_limit=token_limit, requested_tokens=requested, daily_limit=daily, limit_kind=limit_kind)
     return FetchError(f'Upstream HTTP {status}: check credentials or access.' if status in (401, 403)
-                      else f'Upstream HTTP {status}.', status=status)
+                      else f'Upstream HTTP {status}.', status=status, retry_after=retry_after)
 
 
 def public_destination(url):
