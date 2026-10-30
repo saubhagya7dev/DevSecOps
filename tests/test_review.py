@@ -20,7 +20,7 @@ from devsecops.pipeline import Runner
 from devsecops.repository import parse_repo, permitted
 from devsecops.server import make_handler
 from devsecops.store import Store
-from devsecops.config import ROOT
+from devsecops.config import ROOT, ROLE_MODELS
 
 
 TEST_KEYS = {'GEMINI_API_KEY': 'test-gemini', 'GROQ_API_KEY': 'test-groq', 'TAVILY_API_KEY': 'test-tavily'}
@@ -302,7 +302,7 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(payloads[3]['model'], 'qwen/qwen3.8-27b')
         self.assertEqual(payloads[4]['model'], 'openai/gpt-oss-120b')
         self.assertEqual(payloads[6]['model'], 'openai/gpt-oss-120b')
-        self.assertIn('gemini-3.8-flash:generateContent', model.call_args_list[5].args[0])
+        self.assertIn(ROLE_MODELS['analyst']['model'] + ':generateContent', model.call_args_list[5].args[0])
         self.assertEqual(payloads[2]['max_results'], 6)
         self.assertFalse(payloads[2]['include_answer'])
         self.assertEqual(result['artifacts']['validation']['search_calls'], 1)
