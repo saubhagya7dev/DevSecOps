@@ -4,6 +4,7 @@ import os
 import re
 import time
 import threading
+import random
 
 from . import contracts
 from .config import ROLE_MODELS, RESEARCHER_TOKEN_BUDGET
@@ -143,17 +144,22 @@ class ModelClient:
                              and exc.requested_tokens > exc.token_limit)
                 retryable = (exc.status == 429 and not exc.daily_limit and not oversized
                              and exc.retry_after is not None and exc.retry_after <= 60)
+                unavailable = (exc.status == 503 and (exc.retry_after is None or exc.retry_after <= 60))
+                retryable = retryable or unavailable
                 if retryable and attempt == 0 and self.retries < 3:
                     self.retries += 1
-                    delay = exc.retry_after + 0.5
-                    self.emit(role, 'Rate limited; waiting to retry', f'{provider} · waiting {delay:g}s; one retry for this request')
+                    delay = exc.retry_after + 0.5 if exc.retry_after is not None else random.uniform(1, 3)
+                    self.emit(role, 'Provider unavailable; waiting to retry' if unavailable else 'Rate limited; waiting to retry',
+                              f'{provider} · HTTP {exc.status} · waiting {delay:g}s; one retry for this request')
                     deadline = time.monotonic() + delay
                     while time.monotonic() < deadline:
                         self.checkpoint()
                         time.sleep(min(0.25, max(0, deadline - time.monotonic())))
                     self.checkpoint()
                     continue
-                action = ('Reduce request context or use a higher token limit; this request cannot fit the current limit.'
+                action = ('Provider service unavailable (HTTP 503). The repository has not been analyzed by this role. '
+                          'A retry cannot guarantee recovery. Retry later or explicitly configure another supported model; no model was switched automatically.'
+                          if exc.status == 503 else 'Reduce request context or use a higher token limit; this request cannot fit the current limit.'
                           if oversized else 'Daily quota exhausted; wait for reset or change the provider plan.'
                           if exc.daily_limit else 'Rate limit persists. Wait for quota reset and check the provider Limits page.'
                           if exc.status == 429 else 'Check model access, credentials, quota, and network connectivity.')
