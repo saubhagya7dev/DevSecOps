@@ -1,6 +1,6 @@
 import re
 from datetime import date, timedelta
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 
 def normalized(text):
@@ -59,6 +59,16 @@ def validate_research(research, days, today=None):
         except ValueError:
             incident['incident_date'] = 'unknown'
         accepted.append(incident)
+        if incident.get('supporting_sources'):
+            valid_support = []
+            for support in incident['supporting_sources']:
+                other = sources.get(support.get('source_id'))
+                passage = normalized(support.get('source_quote', ''))
+                if other and 40 <= len(passage) <= 800 and passage in normalized(other['text']):
+                    valid_support.append(support)
+                else:
+                    warnings.append(f'Rejected secondary source support for {incident["id"]}.')
+            incident['supporting_sources'] = valid_support
     research['incidents'] = accepted
     research['research_limitations'].extend(warnings)
     return research, warnings
@@ -80,6 +90,10 @@ def validate_review(review, profile, research):
             finding['classification'] = 'Needs verification'
             finding['missing_information'].append('Repository evidence is inferred; confirm the prerequisite.')
             warnings.append(f"Downgraded {finding['id']}: inferred evidence cannot establish the prerequisite.")
+        if finding['classification'] == 'Supported concern' and all(
+                incidents[x]['source_type'] == 'background guidance' for x in finding['incident_ids']):
+            finding['classification'] = 'Background lesson'
+            warnings.append(f'Downgraded {finding["id"]}: background mechanisms alone cannot establish a concern.')
         valid.append(finding)
     review['findings'] = valid
     review['existing_defenses'] = [d for d in review['existing_defenses'] if d['evidence_ids'] and all(x in observations for x in d['evidence_ids'])]
@@ -94,6 +108,12 @@ def md_text(value):
 
 
 def md_url(value):
+    try:
+        parsed = urlsplit(value)
+        if parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password:
+            return '#'
+    except ValueError:
+        return '#'
     return quote(value, safe=':/?#@!$&=+%,;~-')
 
 
@@ -133,7 +153,7 @@ def render_report(repo, profile, research, review, validation, demo=False):
         lines += [f"### {o['id']}: {t(o['claim'])}", '',
                   f"[{t(o['path'])}, lines {o['start_line']}–{o['end_line']}]({md_url(o['url'])}) · {o['kind']}", '',
                   '> ' + t(o['quote']).replace('\n', '\n> '), '']
-    lines += ['## Documented incidents and sources', '']
+    lines += ['## Documented external evidence and sources', '']
     sources = {s['id']: s for s in research['sources']}
     for i in research['incidents']:
         s = sources[i['source_id']]
@@ -142,7 +162,38 @@ def render_report(repo, profile, research, review, validation, demo=False):
                   f"Victim: {t(i['victim'])}. Retrieved: {t(s['retrieved_at'])}.", '',
                   t(i['mechanism']), '', 'Prerequisites: ' + t('; '.join(i['prerequisites'])), '',
                   '> ' + t(i['source_quote']), '']
-    lines += ['## Rejected matches', '']
+        for support in i.get('supporting_sources', []):
+            if support['source_id'] != i['source_id']:
+                other = sources[support['source_id']]
+                lines += [f'Additional source: [{t(other["title"])}]({md_url(other["url"])})', '',
+                          'Publication: ' + t(support.get('publication_date', 'unknown')) + '. Retrieval: ' + t(other['retrieved_at']), '',
+                          '> ' + t(support['source_quote']), '']
+    if research.get('coverage'):
+        lines += ['## Discovery coverage', '', t(research.get('outcome', '')), '',
+                  *[f'- {t(key)}: {t(value)}' for key, value in research['coverage'].items()], '']
+    if research.get('advisories'):
+        lines += ['## Package vulnerability advisories — not proof of an incident', '']
+        for advisory in research['advisories']:
+            package = advisory['package']
+            lines += [f'### {t(advisory["id"])}: {t(advisory["title"])}', '',
+                      f'Package: {t(package["ecosystem"])} / {t(package["name"])}. {t(advisory["version_assessment"])}', '',
+                      'Identifiers: ' + t(', '.join(advisory['identifiers'])), '',
+                      'Provider-reported fixes: ' + t(', '.join(advisory['fixed_versions']) or 'unknown'), '',
+                      'Published: ' + t(advisory['publication_date']) + '. Retrieved: ' + t(advisory['retrieved_at']), '']
+            lines += [f'- [{t(origin["provider"])} record]({md_url(origin["url"])})' for origin in advisory['provenance']]
+    if research.get('techniques'):
+        lines += ['', '## ATT&CK candidates — background mechanisms', '']
+        lines += [f'- [{t(item["id"])}: {t(item["name"])}]({md_url(item["url"])})' for item in research['techniques']]
+        lines += ['', 'Candidate techniques are not confirmed mappings, incidents, or proof of target exposure.', '']
+        lines += [f'- {t(item["incident_id"])}: {t(item["status"])} — {t(", ".join(item["technique_ids"]))}'
+                  for item in research.get('attack_mappings', [])]
+    if research.get('historical_records'):
+        lines += ['', '## Historical VCDB records — limited technical detail', '']
+        for item in research['historical_records']:
+            lines += [f'- {t(item["id"])}: {t(item["summary"])}. {t(item["limitation"])}',
+                      f'  Incident date: {t(item["incident_date"])}; year: {t(item["incident_year"])}. Publication: unknown. Retrieved: {t(item["retrieved_at"])}.',
+                      f'  [Official record]({md_url(item["provenance"])})']
+    lines += ['', '## Rejected matches', '']
     lines += [f"- {r['incident_id']}: {t(r['reason'])}" for r in review['rejected_matches']] or ['None recorded.']
     lines += ['', '## Unknowns and limitations', '']
     for item in profile['unknowns'] + research['research_limitations'] + review['questions'] + validation:
