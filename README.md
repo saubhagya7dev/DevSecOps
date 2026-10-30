@@ -232,8 +232,13 @@ The current search allowlist covers:
 | [GitHub Blog](https://github.blog/security/) | Developer and software supply-chain security. |
 | [Cloudflare Blog](https://blog.cloudflare.com/) | Application, network, and infrastructure security research. |
 | [Unit 42](https://unit42.paloaltonetworks.com/) | Threat intelligence and incident analysis. |
+| [PyPI Blog](https://blog.pypi.org/) | First-party package ecosystem incident investigations. |
+| [JFrog Security Research](https://research.jfrog.com/) | Original software supply-chain and malicious-package research. |
+| [Wiz Research](https://www.wiz.io/blog) | Original cloud and software supply-chain incident analysis. |
 
-Qwen first generates up to three bounded search queries. The backend submits them to Tavily with the primary-source domain allowlist and publication-window dates. Candidate URLs come only from **Tavily result metadata**. URLs merely written in model-generated prose are ignored. The backend independently retrieves eligible pages before they can support an incident record, and checks that the cited passage exists in the fetched text.
+Qwen first generates up to two bounded search queries. The backend submits them to Tavily with the primary-source domain allowlist and publication-window dates. If no eligible candidates remain, one reserved query broadens the search without a date filter; older and undated results remain explicitly labeled. Candidates are interleaved across queries. Weekly vulnerability indexes, community answers, and product tutorials are excluded from incident discovery. Candidate URLs come only from **Tavily result metadata**. URLs merely written in model-generated prose are ignored. The backend independently retrieves eligible pages before they can support an incident record, and checks that the cited passage exists in the fetched text.
+
+Article/main content is preferred over navigation. Full fetched text is retained up to the per-page context bound, while incident extraction receives selected contiguous passages totaling at most **6,000 characters** across sources. Extraction receives source passages without the target profile, so missing proof of target compromise cannot be used to discard a documented external incident. Repository relevance and prerequisites are assessed separately by the Reviewer. Accepted quotes must still match the retained source text. The reviewer receives at most four accepted incident summaries and sixteen compact repository observations, rather than full HTML-page text. These context bounds can omit relevant details and are recorded as limitations.
 
 The default research window is **180 days by publication date**. Publication date, incident date, and retrieval timestamp remain separate. Older and undated material is explicitly labeled; an advisory is not automatically an observed attack, and a useful campaign need not name its victims.
 
@@ -445,17 +450,25 @@ Runtime data lives in the ignored `.devsecops/reviews.sqlite3` file. The fronten
 | Per-file context | Up to 9,000 characters, retaining complete lines |
 | Total repository context | Up to 100,000 characters |
 | Primary pages fetched | Up to six |
-| Per-page context | Up to 18,000 characters |
+| Per-page download | Up to 8,000,000 bytes, HTML/text only |
+| Per-page stored context | Up to 18,000 characters |
+| Total source text sent for extraction | Up to 6,000 characters, selected contiguous passages |
+| Groq request body | At most 18,000 UTF-8 bytes; a conservative size guard, not a tokenizer |
 | Tavily search requests | Up to three; each returns at most six candidates |
 | Model calls | Up to six, including an optional follow-up and re-review |
-| Model output | Up to 6,500 tokens per call |
+| Model output | Analyst: 6,500; query planning: 700; Groq extraction/review: 2,300; follow-up: 1,000 |
+| Model HTTP attempts | Up to nine: six logical calls plus at most three retries |
 | Job deadline | 900 seconds, checked between operations |
 
 Defaults live in [config.py](devsecops/config.py), with request limits in [providers.py](devsecops/providers.py) and source selection in [agents.py](devsecops/agents.py). Increasing budgets changes coverage, latency, and potential provider cost.
 
 **Cancellation is cooperative.** An in-flight network/model request can finish after cancellation is requested, and a provider charge may already have occurred.
 
-A failed research stage can produce a clearly labeled partial report without incident-linked recommendations. Other failures preserve available artifacts and expose an error. External provider failures are not automatically retried; address the cause before starting another run.
+A failed extraction retains retrieved sources and the provider error in the partial report. If no accepted incidents are available, the reviewer is marked **skipped**, rather than completed. The UI distinguishes research failure from a completed search with no supported matches.
+
+A model request receiving HTTP 429 is retried at most once only when the provider supplies a `Retry-After` of at most 60 seconds. There are at most three retries per job; waits check cancellation. Requests larger than the reported token limit, daily quotas, missing reset information, and longer waits fail explicitly. Provider error bodies and organization IDs are not displayed; only safe status and rate-limit numbers are extracted. Byte limits and small output budgets cannot guarantee a fit for every account’s token quota.
+
+A successful `--check-apis` smoke test confirms small-request access. It does **not** establish that full repository workloads fit your account’s token-per-minute/day limits. Check the [Groq Limits page](https://console.groq.com/settings/limits) and [rate-limit documentation](https://console.groq.com/docs/rate-limits) if throttling persists. A request larger than a model’s entire per-minute allowance cannot succeed just by waiting; raise that allowance or explicitly configure another compatible model.
 
 ## Development and verification
 
@@ -470,7 +483,7 @@ python -m compileall -q devsecops run.py
 node --check web/app.js
 ```
 
-The current suite contains **44 test cases** covering:
+The current suite contains **56 test cases** covering:
 
 - Citation rejection, evidence-reference integrity, date handling, and unknowns.
 - Retention of existing defenses and rejected matches in controlled fixtures.
@@ -483,13 +496,14 @@ The current suite contains **44 test cases** covering:
 
 API tests need permission to open and connect to loopback sockets. Temporary test data stays under ignored `test-output/`.
 
-**Verification scope:** all 44 tests pass after the hosted-provider migration, including the complete mocked Gemini/Groq/Tavily workflow and bounded follow-up. Earlier checks exercised the browser workflow, downloads, responsive layout, and public GitHub ingestion. Live API smoke checks are separate from a complete repository review; run `--check-apis` to verify your effective configuration. The screenshots and included example report use offline fixtures. These checks are not a live-provider benchmark, a security audit, or evidence that generated recommendations are always correct.
+**Verification scope:** all 56 tests pass after the hosted-provider migration, including the complete mocked Gemini/Groq/Tavily workflow and bounded follow-up. Earlier checks exercised the browser workflow, downloads, responsive layout, and public GitHub ingestion. Live API smoke checks are separate from a complete repository review; run `--check-apis` to verify your effective configuration. The screenshots and included example report use offline fixtures. These checks are not a live-provider benchmark, a security audit, or evidence that generated recommendations are always correct.
 
 ### Project structure
 
 ```text
 DevSecOps/
 ├── devsecops/
+│   ├── context.py         Bounded evidence views for hosted models
 │   ├── providers.py       Gemini, Groq, and Tavily adapters
 │   ├── diagnostics.py     Independent live API smoke checks
 │   ├── agents.py          Three role implementations and source retrieval
@@ -523,6 +537,7 @@ DevSecOps/
 | Symptom | What to check |
 | --- | --- |
 | **Live mode needs setup** | Set `GEMINI_API_KEY`, `GROQ_API_KEY`, and `TAVILY_API_KEY` in the server environment or local `.env`, restart the server, and refresh. |
+| **HTTP 429 during research** | Inspect the reported limit/reset. The pipeline bounds payloads and retries short transient limits; oversized requests and daily quotas require smaller workloads or higher provider limits. |
 | **Configured, but analysis fails** | A configured flag only means a key is present. Check account access, model compatibility, network access, billing, and the displayed upstream error. |
 | **GitHub access/rate-limit error** | Confirm the repository is public and use an appropriate read-only `GITHUB_TOKEN` if needed. |
 | **Invalid repository URL** | Supply `https://github.com/owner/repository`. Branch paths, file URLs, queries, private repositories, and non-GitHub hosts are unsupported. |
@@ -544,7 +559,7 @@ Potential next steps—**not current capabilities**—include:
 - A larger, held-out repository–incident evaluation set with measured relevance and citation-support quality.
 - Better source selection and language-aware repository indexing.
 - More incident-source adapters and PDF extraction.
-- Controlled retry policies, retention settings, and clearer usage accounting.
+- Provider-aware token counting, retained-evidence resume, and configurable retention policies.
 - Authenticated deployment and additional safeguards before any multi-user release.
 
 ## Contributing
