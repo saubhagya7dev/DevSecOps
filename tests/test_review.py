@@ -268,6 +268,9 @@ class PipelineTests(unittest.TestCase):
         self.runner.run(job['id'])
         result = self.store.get(job['id'])
         self.assertEqual(result['status'], 'partial')
+        self.assertEqual(result['stages']['reviewer'], 'skipped')
+        self.assertEqual(result['artifacts']['review']['status'], 'skipped')
+        self.assertIn('not performed', result['artifacts']['review']['summary'])
         self.assertEqual(result['artifacts']['review']['findings'], [])
         self.assertIn('No evidence-backed recommendations', result['report'])
 
