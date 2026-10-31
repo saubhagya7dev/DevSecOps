@@ -93,6 +93,10 @@ A Supported concern is not confirmed exploitability. Provide a concrete preventi
 step for each finding, without executing anything. Do not recommend a missing defense that repository evidence
 shows is already present. Prioritize by plausible impact and evidence confidence separately. Allow no findings.
 Use only the supplied IDs. Do not introduce uncited incidents or new repository facts. Explain rejected matches.
+Read the source_quote before trusting an incident's title, category, identifiers, or model-written mechanism.
+If the source disputes or debunks a vulnerability claim, do not turn the disputed claim into a vulnerability
+finding. Missing version information cannot establish a vulnerability that the source does not substantiate.
+Needs verification still requires a supported external mechanism; reject contradicted matches explicitly.
 Dates/window labels are already normalized; do not present background or undated sources as recent attacks.
 If a SPECIFIC unresolved question could be answered by reexamining the available repository or source evidence,
 you may request at most ONE follow-up from analyst or researcher. It cannot inspect deployment or add permissions.
