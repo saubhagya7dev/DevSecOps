@@ -1,5 +1,6 @@
 """Bounded structured discovery. Advisories and knowledge records never prove an attack."""
 import json
+import math
 import os
 import re
 import time
@@ -78,6 +79,23 @@ def identifiers(values):
                    for x in re.findall(r'CVE-\d{4}-\d{4,}|GHSA-[\w]{4}-[\w]{4}-[\w]{4}|(?:PYSEC|OSV)-[\w-]+', value, re.I)})
 
 
+def cvss_ratings(raw, provider):
+    """Keep published numeric ratings; never turn a vector or qualitative label into a score."""
+    if provider != 'github':
+        return []
+    values = raw.get('cvss_severities') or {}
+    if not isinstance(values, dict):
+        return []
+    result = []
+    for field, version in [('cvss_v4', '4'), ('cvss_v3', '3')]:
+        value = values.get(field) or {}
+        score = value.get('score') if isinstance(value, dict) else None
+        if type(score) in (int, float) and 0 <= score <= 10 and math.isfinite(score):
+            result.append({'score': score, 'version': version, 'vector': str(value.get('vector_string', ''))[:240],
+                           'provider': provider, 'record_id': raw.get('ghsa_id', '')})
+    return result
+
+
 def normalize_advisory(raw, package, provider, retrieved_at=None):
     if not isinstance(raw, dict) or raw.get('withdrawn') or raw.get('withdrawn_at'):
         return None
@@ -110,7 +128,9 @@ def normalize_advisory(raw, package, provider, retrieved_at=None):
                       [entry.get('value', '') for entry in raw.get('identifiers', [])])
     refs = [r.get('url') if isinstance(r, dict) else r for r in raw.get('references', [])[:30]]
     refs = sorted({canonical_url(r) for r in refs if isinstance(r, str) and canonical_url(r)})
+    ratings = cvss_ratings(raw, provider)
     return {'id': record_id, 'category': 'vulnerability advisory', 'identifiers': ids,
+            'cvss_score': ratings[0]['score'] if ratings else None, 'cvss_ratings': ratings,
             'title': redact(str(raw.get('summary', record_id)))[:400], 'package': package,
             'version_assessment': 'Provider query for exact declared/resolved version; production installation unverified.'
                                   if package['version'] else 'Package-name match only; unresolved range/version. Applicability unknown.',
@@ -141,6 +161,9 @@ def deduplicate_advisories(records):
             ranges = {json.dumps(value, sort_keys=True): value for value in merged['affected_ranges'] + old['affected_ranges']}
             merged['affected_ranges'] = list(ranges.values())[:8]
             merged['provenance'] += old['provenance']
+            ratings = {json.dumps(r, sort_keys=True): r for r in merged.get('cvss_ratings', []) + old.get('cvss_ratings', [])}
+            merged['cvss_ratings'] = sorted(ratings.values(), key=lambda r: r['version'], reverse=True)
+            merged['cvss_score'] = merged['cvss_ratings'][0]['score'] if merged['cvss_ratings'] else None
         result.append(merged)
     return result[:MAX_DISCOVERY_RECORDS]
 
