@@ -12,6 +12,8 @@ def obj(**properties):
 
 
 SEARCH_PLAN = obj(queries=array(S))
+# Small wire contract for low-quota hosted inference. Expanded and quote-checked in Python.
+COMPACT_INCIDENT = obj(k={'type': 'integer', 'enum': [0, 1, 2, 3]}, m=S, p=S)
 
 PROFILE = obj(
     summary=S,
