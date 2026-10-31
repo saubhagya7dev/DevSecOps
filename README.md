@@ -24,7 +24,7 @@ One public GitHub URL. Three AI roles. A traceable path from source code to prev
 
 <br>
 
-![DevSecOps landing page with orbital evidence visuals and repository input](docs/assets/hero.png)
+![DevSecOps black investigation workbench with repository graph, evidence inspector, and event timeline](docs/assets/investigation-workbench.png)
 
 > **Current scope:** a local, static, read-only review assistant. It investigates repository evidence and documented attack mechanisms; it does not establish production exposure, execute target code, exploit weaknesses, or apply fixes.
 
@@ -55,9 +55,11 @@ The central question is:
 
 ## The workspace
 
-The interface follows the review from repository inspection to the final report. Its dark visual system includes responsive layouts, keyboard navigation for result tabs, and reduced-motion support.
+The black investigation workbench uses square panels, compact typography, thin straight connectors, and softly glowing graph nodes. Select a file or dependency to inspect its cited observations, external evidence, and reviewer assessment. The live timeline follows real server events; active status text uses an original CSS luminance animation with reduced-motion support.
 
-**The dashboard below shows the fictional offline example. It is not a real incident investigation or a finding against a real repository.**
+The graph shows folder membership and citation associations, not a complete call graph. It prioritizes inspected files and displays at most 160 file paths, with omissions disclosed. Colors identify groups, never vulnerability severity. See [workspace interactions and verification](docs/investigation-workbench.md).
+
+**The graph screenshot above uses saved public SwarmSim evidence from the documented live integration run. It does not establish a vulnerability or production exposure. The earlier report screenshot below uses the fictional offline example and shows the previous interface.**
 
 ![DevSecOps dashboard showing a recommendation, missing prerequisites, verification steps, and the live activity feed](docs/assets/dashboard.png)
 
@@ -74,9 +76,9 @@ The interface follows the review from repository inspection to the final report.
 
 <br>
 
-<img src="docs/assets/mobile-review.png" width="320" alt="Mobile dashboard showing completed agents and a fictional recommendation that needs verification">
+<img src="docs/assets/investigation-mobile.png" width="320" alt="Mobile black workbench with repository graph, live timeline, and evidence inspector">
 
-The mobile interface retains the evidence, uncertainty labels, result tabs, and activity stream. This screenshot also uses the synthetic offline example.
+The mobile interface stacks the graph, timeline, and evidence inspector. This screenshot uses the same saved public repository review as the desktop workbench. The accessible node list supports precise selection when the graph is small.
 
 </details>
 
@@ -491,9 +493,11 @@ python -m compileall -q devsecops run.py
 
 # Optional JavaScript syntax check; requires Node.js
 node --check web/app.js
+node --check web/graph.js
+node --test tests/test_graph.cjs
 ```
 
-The current suite contains **99 test cases** covering:
+The current suite contains **100 Python test cases**, plus **7 Node.js graph tests** covering:
 
 - Citation rejection, evidence-reference integrity, date handling, and unknowns.
 - Retention of existing defenses and rejected matches in controlled fixtures.
@@ -506,7 +510,7 @@ The current suite contains **99 test cases** covering:
 
 API tests need permission to open and connect to loopback sockets. Temporary test data stays under ignored `test-output/`.
 
-**Verification scope:** all 99 tests pass after the low-quota researcher fix, including the complete mocked Gemini/Groq/Tavily workflow and bounded follow-up. Earlier checks exercised the browser workflow, downloads, responsive layout, and public GitHub ingestion. Live API smoke checks are separate from a complete repository review; run `--check-apis` to verify your effective configuration. The four-repository live integration results and rerun command are recorded in [live verification](docs/live-verification-2026-10-31.md). The screenshots and included example report use offline fixtures. These checks are not a live-provider benchmark, a security audit, or evidence that generated recommendations are always correct.
+**Verification scope:** all 100 Python tests and 7 graph tests pass after the investigation workbench update, including the complete mocked Gemini/Groq/Tavily workflow and bounded follow-up. Earlier checks exercised the browser workflow, downloads, responsive layout, and public GitHub ingestion. Live API smoke checks are separate from a complete repository review; run `--check-apis` to verify your effective configuration. The four-repository live integration results and rerun command are recorded in [live verification](docs/live-verification-2026-10-31.md). The current workbench screenshots use saved public repository artifacts; the earlier interface screenshots and included example report use synthetic offline fixtures. These checks are not a live-provider benchmark, a security audit, or evidence that generated recommendations are always correct.
 
 ### Project structure
 
@@ -535,7 +539,8 @@ DevSecOps/
 │   └── __main__.py        Server and CLI entry points
 ├── web/
 │   ├── index.html         Repository review workspace
-│   ├── styles.css         Responsive dark visual system
+│   ├── graph.js           Deterministic path and citation graph
+│   ├── styles.css         Black workbench, responsive layout, luminous status text
 │   ├── app.js             Job submission, activity, evidence, and exports
 │   └── favicon.svg        Code-shield identity
 ├── tests/                 Standard-library test suite
