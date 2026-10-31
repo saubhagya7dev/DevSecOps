@@ -126,3 +126,7 @@ Extraction keys include provider/model, schema, instructions, token configuratio
 Focused offline fixtures cover official-source eligibility and redirect destinations, package/version uncertainty, OSV/GitHub normalization and alias merging, bounded optional VCDB acquisition, sparse historical records, unsupported technique IDs, failed/empty-extraction fallback, quotation integrity, secondary-source provenance, cache invalidation, rate limits, byte/token guards, and resource exhaustion.
 
 Public OSV, GitHub global-advisory, and official MITRE STIX acquisition/normalization were checked separately without hosted-model calls. These checks establish connector behavior for those samples, not improved matching accuracy. No representative incident-matching evaluation or paid full-review benchmark was performed for this change. The offline example remains entirely synthetic and independent of network/model access.
+
+### Optional planning warnings
+
+A locally blocked query-planning call is recoverable: Python builds the mechanism/technology query and continues discovery. It remains a visible limitation, but is not itself classified as failed extraction. If completed searches return no eligible original reports, extraction is not attempted and the Reviewer is skipped for lack of accepted evidence. This is distinct from extraction actually failing its byte/token guard or provider request; those failures still produce explicit partial research.
