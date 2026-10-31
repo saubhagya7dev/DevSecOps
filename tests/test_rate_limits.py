@@ -16,6 +16,22 @@ ANSWER = {'answer': 'Unknown', 'evidence_ids': [], 'incident_ids': [], 'unknowns
 
 @patch.dict(os.environ, TEST_KEYS)
 class RateLimitTests(unittest.TestCase):
+    def test_github_403_identifies_exhausted_requests_and_reset_without_body(self):
+        response = Mock(status=403)
+        headers = {'X-RateLimit-Remaining': '0', 'X-RateLimit-Reset': '1793414451'}
+        response.getheader.side_effect = lambda key, default=None: headers.get(key, default)
+        error = upstream_error(response, host='api.github.com')
+        self.assertIn('GitHub API rate limit exhausted', str(error))
+        self.assertIn('2026-10-31 02:40:51 UTC', str(error))
+        self.assertEqual(error.status, 403)
+        response.read.assert_not_called()
+
+    def test_permission_denials_and_other_hosts_are_not_called_github_rate_limits(self):
+        for host, remaining in [('api.github.com', '1'), ('api.groq.com', '0')]:
+            response = Mock(status=403)
+            response.getheader.side_effect = lambda key, default=None: remaining if key == 'X-RateLimit-Remaining' else default
+            self.assertIn('check credentials or access', str(upstream_error(response, host=host)))
+
     def setUp(self):
         pacing = patch("devsecops.providers.RESEARCH_PACER")
         pacing.start()
