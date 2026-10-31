@@ -109,7 +109,7 @@ Advisories, ATT&CK/background mechanisms, historical VCDB records, and documente
 
 ## Configuration, caching, and access
 
-Existing model credentials and provider settings are unchanged. Optional settings in `.env.roles.example` are:
+Existing model credentials and provider settings are unchanged. Optional settings in `.env.example` are:
 
 ```dotenv
 RESEARCHER_TOKEN_BUDGET=1000
