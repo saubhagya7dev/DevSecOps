@@ -136,7 +136,7 @@ Edit the file locally:
 GEMINI_API_KEY=your-gemini-api-key
 GROQ_API_KEY=your-groq-api-key
 TAVILY_API_KEY=your-tavily-api-key
-ANALYST_MODEL=gemini-3.8-flash
+ANALYST_MODEL=gemini-3.5-flash-lite
 RESEARCHER_MODEL=qwen/qwen3.8-27b
 REVIEWER_MODEL=openai/gpt-oss-120b
 GITHUB_TOKEN=
@@ -150,7 +150,7 @@ Then restart `python run.py` and refresh the browser.
 | `GEMINI_API_KEY` | Live mode only | Google Gemini Developer API authentication for the Repository Analyst. |
 | `GROQ_API_KEY` | Live mode only | Groq authentication shared by the Incident Researcher and Security Reviewer. |
 | `TAVILY_API_KEY` | Live mode only | Tavily search authentication; separate from model inference. |
-| `ANALYST_MODEL` | No | Gemini model; defaults to `gemini-3.8-flash`. |
+| `ANALYST_MODEL` | No | Gemini model; defaults to `gemini-3.5-flash-lite`. |
 | `RESEARCHER_MODEL` | No | Groq model; defaults to `qwen/qwen3.8-27b`. |
 | `REVIEWER_MODEL` | No | Groq model; defaults to `openai/gpt-oss-120b`. |
 | `GITHUB_TOKEN` | No | Public GitHub API authentication; required for optional VCDB code-search discovery. |
@@ -183,7 +183,7 @@ Three specialized roles run sequentially under a deterministic controller. Each 
 
 | Role | Hosted provider | Default model | Tools |
 | --- | --- | --- | --- |
-| Repository Analyst | Google Gemini Developer API | `gemini-3.8-flash` | No model tools; backend supplies inspected files. |
+| Repository Analyst | Google Gemini Developer API | `gemini-3.5-flash-lite` | No model tools; backend supplies inspected files. |
 | Incident Researcher | Groq | `qwen/qwen3.8-27b` | Generates queries; backend calls Tavily and fetches eligible pages. |
 | Security Reviewer | Groq | `openai/gpt-oss-120b` | Reviews existing evidence; may request one bounded follow-up. |
 
@@ -192,7 +192,7 @@ Three specialized roles run sequentially under a deterministic controller. Each 
 ```mermaid
 flowchart LR
     URL["Public GitHub URL"] --> PIN["Pin revision<br/>Read source"]
-    PIN --> ANALYST["Repository Analyst<br/>Gemini 3.8 Flash"]
+    PIN --> ANALYST["Repository Analyst<br/>Gemini 3.5 Flash-Lite"]
     ANALYST --> RESEARCH["Incident Researcher<br/>Qwen 3.8 + Tavily"]
     RESEARCH --> REVIEW["Security Reviewer<br/>GPT OSS 120B"]
     REVIEW --> VALIDATE["Evidence checks"]
