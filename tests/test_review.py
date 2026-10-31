@@ -395,6 +395,12 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(config['roles']['reviewer']['model'], 'openai/gpt-oss-120b')
         self.assertEqual(config['search_provider'], 'tavily')
 
+    def test_repository_graph_asset_is_served_under_same_origin_policy(self):
+        status, body, headers = self.request('GET', '/graph.js')
+        self.assertEqual(status, 200)
+        self.assertIn(b'RepoGraph', body)
+        self.assertIn("script-src 'self'", headers['Content-Security-Policy'])
+
     def test_csrf_and_host_protection(self):
         self.assertEqual(self.request('POST','/api/jobs', {'mode':'demo'})[0],403)
         self.assertEqual(self.request('GET','/api/config',headers={'Host':'evil.example'})[0],403)
