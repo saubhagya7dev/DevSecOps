@@ -36,6 +36,32 @@ STIX = {'id': 'bundle--fixture', 'objects': [
 
 
 class StructuredDiscoveryTests(unittest.TestCase):
+    def test_published_cvss_versions_and_zero_scores_are_retained(self):
+        raw = {**GHSA, 'cvss_severities': {
+            'cvss_v4': {'score': 0, 'vector_string': 'CVSS:4.0/fixture'},
+            'cvss_v3': {'score': 9.8, 'vector_string': 'CVSS:3.1/fixture'}}}
+        record = normalize_advisory(raw, PACKAGE, 'github')
+        self.assertEqual(record['cvss_score'], 0)
+        self.assertEqual(record['cvss_ratings'][0]['version'], '4')
+        self.assertEqual(record['cvss_ratings'][1]['score'], 9.8)
+        self.assertEqual(record['cvss_ratings'][0]['record_id'], GHSA['ghsa_id'])
+
+    def test_invalid_and_vector_only_ratings_remain_unscored(self):
+        for score in [None, True, '9.8', float('nan'), float('inf'), -1, 11, 10 ** 400]:
+            record = normalize_advisory({**GHSA, 'cvss_severities': {'cvss_v3': {'score': score}}}, PACKAGE, 'github')
+            self.assertIsNone(record['cvss_score'])
+        record = normalize_advisory({**OSV, 'severity': [{'type': 'CVSS_V3', 'score': 'CVSS:3.1/AV:N'}]}, PACKAGE, 'osv')
+        self.assertIsNone(record['cvss_score'])
+
+    def test_cvss_provenance_survives_merging_an_unscored_alias(self):
+        scored = normalize_advisory({**GHSA, 'cvss_severities': {'cvss_v3': {'score': 8.1}}}, PACKAGE, 'github')
+        unscored = normalize_advisory(OSV, PACKAGE, 'osv')
+        for records in [[scored, unscored], [unscored, scored]]:
+            merged = deduplicate_advisories(records)
+            self.assertEqual(len(merged), 1)
+            self.assertEqual(merged[0]['cvss_score'], 8.1)
+            self.assertEqual(merged[0]['cvss_ratings'][0]['provider'], 'github')
+
     def test_precise_individual_report_paths_and_untrusted_urls(self):
         for url in [REPORT, 'https://cloud.google.com/blog/topics/threat-intelligence/fixture',
                     'https://www.microsoft.com/en-us/security/blog/2026/01/01/fixture/',
