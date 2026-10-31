@@ -463,11 +463,13 @@ Runtime data lives in the ignored `.devsecops/reviews.sqlite3` file; the bounded
 | Groq request body | At most 18,000 UTF-8 bytes; a conservative size guard, not a tokenizer |
 | Tavily search requests | Up to three; each returns at most six candidates |
 | Model calls | Up to six, including an optional follow-up and re-review |
-| Model output | Analyst: 6,500; query planning: 700; Groq extraction/review: 2,300; follow-up: 1,000 |
+| Model output | Analyst: 6,500; query planning: 700; Groq full extraction/review: 2,300; low-quota extraction: 192; follow-up: 1,000 |
 | Structured API/dataset requests | Up to twelve total, including retries; at most two bounded dataset downloads |
 | Researcher token allowance | 1,000 conservative estimated tokens including schema/instructions and reserved output; configure only after verifying account quota |
 | Model HTTP attempts | Up to nine: six logical calls plus at most three retries |
 | Job deadline | 900 seconds, checked between operations |
+
+At allowances below 4,000, Python plans searches and Qwen interprets one ranked passage through a compact contract. At the default 1,000 allowance, this uses at most 450 source characters and a 192-token output reserve. Exact transmitted quotations are assigned and checked in Python; dates and victims remain unknown. This mode prevents oversized requests but provides narrow research coverage; it does not guarantee incident relevance. See [the discovery design](docs/incident-discovery.md).
 
 Defaults live in [config.py](devsecops/config.py), with request limits in [providers.py](devsecops/providers.py) and source selection in [incident_research.py](devsecops/incident_research.py). Increasing budgets changes coverage, latency, and potential provider cost.
 
@@ -492,7 +494,7 @@ python -m compileall -q devsecops run.py
 node --check web/app.js
 ```
 
-The current suite contains **91 test cases** covering:
+The current suite contains **97 test cases** covering:
 
 - Citation rejection, evidence-reference integrity, date handling, and unknowns.
 - Retention of existing defenses and rejected matches in controlled fixtures.
@@ -505,7 +507,7 @@ The current suite contains **91 test cases** covering:
 
 API tests need permission to open and connect to loopback sockets. Temporary test data stays under ignored `test-output/`.
 
-**Verification scope:** all 91 tests pass after the structured-discovery update, including the complete mocked Gemini/Groq/Tavily workflow and bounded follow-up. Earlier checks exercised the browser workflow, downloads, responsive layout, and public GitHub ingestion. Live API smoke checks are separate from a complete repository review; run `--check-apis` to verify your effective configuration. The screenshots and included example report use offline fixtures. These checks are not a live-provider benchmark, a security audit, or evidence that generated recommendations are always correct.
+**Verification scope:** all 97 tests pass after the low-quota researcher fix, including the complete mocked Gemini/Groq/Tavily workflow and bounded follow-up. Earlier checks exercised the browser workflow, downloads, responsive layout, and public GitHub ingestion. Live API smoke checks are separate from a complete repository review; run `--check-apis` to verify your effective configuration. The four-repository live integration results and rerun command are recorded in [live verification](docs/live-verification-2026-10-31.md). The screenshots and included example report use offline fixtures. These checks are not a live-provider benchmark, a security audit, or evidence that generated recommendations are always correct.
 
 ### Project structure
 
