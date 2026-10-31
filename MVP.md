@@ -16,7 +16,7 @@ This version performs static, read-only analysis. It does not claim to establish
 4. Security Reviewer compares prerequisites against repository evidence and produces recommendations with explicit uncertainty.
 5. Validate report structure and evidence references, then save report.md and the intermediate JSON artifacts.
 
-Use three sequential agent roles with structured handoffs. The Repository Analyst uses Gemini Developer API (`gemini-3.8-flash`), Incident Researcher uses Groq (`qwen/qwen3.8-27b`) with backend-controlled Tavily search, and Security Reviewer uses Groq (`openai/gpt-oss-120b`). Follow-ups return to the requested role’s assigned model. A small orchestrator controls the steps, budgets, retries, and tool permissions. No autonomous delegation protocol is needed for v1.
+Use three sequential agent roles with structured handoffs. The Repository Analyst uses Gemini Developer API (`gemini-3.5-flash-lite`), Incident Researcher uses Groq (`qwen/qwen3.8-27b`) with backend-controlled Tavily search, and Security Reviewer uses Groq (`openai/gpt-oss-120b`). Follow-ups return to the requested role’s assigned model. A small orchestrator controls the steps, budgets, retries, and tool permissions. No autonomous delegation protocol is needed for v1.
 
 ## Repository profile
 
