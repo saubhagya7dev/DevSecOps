@@ -16,7 +16,7 @@ def load_env():
 load_env()
 DATA = ROOT / '.devsecops'
 ROLE_MODELS = {
-    'analyst': {'provider': 'gemini', 'model': os.getenv('ANALYST_MODEL', 'gemini-3.8-flash'), 'credential': 'GEMINI_API_KEY'},
+    'analyst': {'provider': 'gemini', 'model': os.getenv('ANALYST_MODEL', 'gemini-3.5-flash-lite'), 'credential': 'GEMINI_API_KEY'},
     'researcher': {'provider': 'groq', 'model': os.getenv('RESEARCHER_MODEL', 'qwen/qwen3.8-27b'), 'credential': 'GROQ_API_KEY'},
     'reviewer': {'provider': 'groq', 'model': os.getenv('REVIEWER_MODEL', 'openai/gpt-oss-120b'), 'credential': 'GROQ_API_KEY'},
 }
