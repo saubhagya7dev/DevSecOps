@@ -1,11 +1,6 @@
 <div align="center">
 
-<img src="web/favicon.svg" width="64" height="64" alt="DevSecOps code-shield logo">
-
 # DevSecOps
-
-### Know your code. See the bigger picture.
-
 **Incident-informed security reviews for builders.**
 
 One public GitHub URL. Three AI roles. A traceable path from source code to preventive action.
@@ -16,13 +11,10 @@ One public GitHub URL. Three AI roles. A traceable path from source code to prev
 [![SQLite](https://img.shields.io/badge/storage-SQLite-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 [![Version](https://img.shields.io/badge/version-0.1.0-blue)](pyproject.toml)
 
-<br>
-
 [Quick start](#quick-start) · [The workspace](#the-workspace) · [How it works](#how-it-works) · [Architecture](#architecture) · [Example report](docs/examples/offline-report.md)
 
 </div>
 
-<br>
 
 ![DevSecOps black investigation workbench with repository graph, evidence inspector, and event timeline](docs/assets/investigation-workbench.png)
 
@@ -61,8 +53,6 @@ The graph shows folder membership and citation associations, not a complete call
 
 **The graph screenshot above uses saved public SwarmSim evidence from the documented live integration run. It does not establish a vulnerability or production exposure. The earlier report screenshot below uses the fictional offline example and shows the previous interface.**
 
-![DevSecOps dashboard showing a recommendation, missing prerequisites, verification steps, and the live activity feed](docs/assets/dashboard.png)
-
 | View | What you can inspect |
 | --- | --- |
 | **Overview** | Technology, application components, cited observations, coverage, and open questions. |
@@ -70,17 +60,6 @@ The graph shows folder membership and citation associations, not a complete call
 | **Recommendations** | Relevance classifications, impact, confidence, counterevidence, actions, and verification steps. |
 | **Evidence** | Inspected file references, code excerpts, skipped files, and validation results. |
 | **Report** | Markdown preview, download, clipboard copy, and JSON artifact export. |
-
-<details>
-<summary><strong>See the mobile review experience</strong></summary>
-
-<br>
-
-<img src="docs/assets/investigation-mobile.png" width="320" alt="Mobile black workbench with repository graph, live timeline, and evidence inspector">
-
-The mobile interface stacks the graph, timeline, and evidence inspector. This screenshot uses the same saved public repository review as the desktop workbench. The accessible node list supports precise selection when the graph is small.
-
-</details>
 
 ## Quick start
 
@@ -588,10 +567,6 @@ Potential next steps—**not current capabilities**—include:
 Open an issue describing the problem or proposed behavior before a substantial change. Keep pull requests focused, document coverage/permission changes, and include relevant fixture or integration checks. Clearly label synthetic incidents and never present fixture output as real-world findings.
 
 Do not include keys, personal runtime data, or sensitive disclosure details in public issues or commits. Coordinate a private reporting channel with the maintainer before sharing sensitive security reports.
-
-## License
-
-A `LICENSE` file has not been added to this repository. No project license is currently specified.
 
 ## References
 
