@@ -82,7 +82,7 @@ function renderOverview(a) {
 }
 
 function renderStructuredDiscovery(r) {
-  const advisories = (r.advisories || []).map(item => `<article class="incident-card"><span class="tag">Vulnerability advisory</span><h3>${esc(item.id)} · ${esc(item.title)}</h3><p>${esc(item.package.ecosystem)} / ${esc(item.package.name)} · ${esc(item.package.version_kind)}</p><p>${esc(item.version_assessment)}</p><p>Identifiers: ${esc(item.identifiers.join(', ') || 'Not supplied')}</p><p>Provider-reported fixes: ${esc(item.fixed_versions.join(', ') || 'Unknown')}</p><p>Published ${esc(item.publication_date)} · Retrieved ${esc(item.retrieved_at)}</p><p>${item.provenance.map(p => link(p.url, `${p.provider} record`)).join(' · ')}</p><p class="note">An advisory is not evidence that an attack occurred or that this repository is exploitable.</p></article>`).join('');
+  const advisories = (r.advisories || []).map(item => `<article class="incident-card"><span class="tag">Vulnerability advisory</span><h3>${esc(item.id)} · ${esc(item.title)}</h3><p>${esc(item.package.ecosystem)} / ${esc(item.package.name)} · ${esc(item.package.version_kind)}</p><p>${esc(item.version_assessment)}</p><p>CVSS: ${esc(item.cvss_score ?? 'Unscored')}</p><p>Identifiers: ${esc(item.identifiers.join(', ') || 'Not supplied')}</p><p>Provider-reported fixes: ${esc(item.fixed_versions.join(', ') || 'Unknown')}</p><p>Published ${esc(item.publication_date)} · Retrieved ${esc(item.retrieved_at)}</p><p>${item.provenance.map(p => link(p.url, `${p.provider} record`)).join(' · ')}</p><p class="note">An advisory is not evidence that an attack occurred or that this repository is exploitable.</p></article>`).join('');
   const techniques = (r.techniques || []).map(t => `<p>${link(t.url, `${t.id} · ${t.name}`)}</p>`).join('');
   const history = (r.historical_records || []).map(h => `<article class="incident-card"><span class="tag">Historical record</span><h3>${esc(h.id)}</h3><p>${esc(h.summary)}</p><p>Incident ${esc(h.incident_date)} · Year ${esc(h.incident_year ?? "unknown")} · Publication unknown · Retrieved ${esc(h.retrieved_at)}</p><p>${esc(h.limitation)}</p><p>${link(h.provenance, 'Official VCDB record')}</p></article>`).join('');
   const mappings = (r.attack_mappings || []).map(m => `<p class="note">${esc(m.incident_id)} · ${esc(m.status)} ${esc(m.technique_ids.join(', '))}</p>`).join('');
@@ -201,7 +201,7 @@ async function reloadCurrent() {
 async function selectJob(id) {
   eventStream?.close(); clearTimeout(reloadTimer);
   document.body.classList.remove('show-input');
-  currentId = id; current = null; eventItems = []; selectedNode = null; graphSignature = ''; graphZoom = 1; graphPan = {x:0,y:0}; streamConnected = false;
+  currentId = id; current = null; eventItems = []; selectedNode = null; graphSignature = ''; streamConnected = false; graphView?.reset();
   $('report-section').hidden = true;
   const u = new URL(location.href); u.searchParams.set('review', id); history.replaceState(null,'',u);
   $('activity-log').innerHTML = ''; renderEvents();
@@ -277,44 +277,36 @@ document.addEventListener('keydown', e => { if (e.key === '/' && !['INPUT','TEXT
 
 // Small, event-driven workspace view. Glow is visual; graph relationships come from artifacts.
 let selectedNode = null, graphSignature = '', graphModel = {nodes:[],edges:[],groups:[]};
-let graphMode = 'structure', graphZoom = 1, graphPan = {x:0,y:0}, streamConnected = false;
+let graphMode = 'structure', streamConnected = false;
+let graphView=null;
+const graphSettings={query:'',mode:'structure',inspected:false,orphans:true,minScore:0,severities:['Critical','High','Medium','Low','Clean','Unscored'],colorMode:'architecture',nodeScale:1,linkWidth:1,labels:'large',pulses:false,gravity:.007,charge:5000,distance:90,damping:.82};
 function renderGraph() {
-  if(typeof RepoGraph === 'undefined'){
-    $('graph-coverage').textContent='Graph asset unavailable';
-    $('graph-empty').hidden=false;
-    $('graph-empty').querySelector('h3').textContent='Restart the local server';
-    $('graph-empty').querySelector('p').textContent='Restart python run.py, then refresh to load the new graph asset.';
-    return;
-  }
-  const artifacts=current?.artifacts || {};
+  if(typeof RepoGraph==='undefined'||!RepoGraph.CanvasView){$('graph-coverage').textContent='Refresh the page or restart the local server to load the graph.';return;}
+  if(!graphView)graphView=new RepoGraph.CanvasView($('repo-graph'),selectGraphNode,node=>{
+    $('graph-tooltip').hidden=!node;
+    $('graph-tooltip').textContent=node?`${node.path||node.label} / ${node.type} / ${node.cvss!==null&&node.cvss!==undefined?'CVSS '+node.cvss:'Unscored'}`:'';
+  });
+  const artifacts=current?.artifacts||{};
   const signature=JSON.stringify([currentId,artifacts,eventItems.filter(e=>e.title==='Read repository file').map(e=>e.detail)]);
-  if(signature !== graphSignature){
-    graphModel=RepoGraph.build(artifacts,eventItems); graphSignature=signature;
-    if(!graphModel.nodes.some(n=>n.id===selectedNode)) selectedNode=graphModel.nodes.find(n=>n.type==='file'&&n.inspected)?.id || graphModel.nodes[0]?.id;
+  if(signature!==graphSignature){
+    graphModel=RepoGraph.build(artifacts,eventItems);graphSignature=signature;
+    if(!graphModel.nodes.some(n=>n.id===selectedNode))selectedNode=graphModel.nodes.find(n=>n.type==='file'&&n.inspected)?.id||graphModel.nodes[0]?.id;
   }
-  const query=$('graph-search').value.toLowerCase(), inspected=$('inspected-only').checked;
-  const visible=graphModel.nodes.filter(n=>(graphMode==='evidence'||['file','directory','repository','technology'].includes(n.type)) && (!inspected||n.inspected||n.type==='directory'));
-  const ids=new Set(visible.map(n=>n.id)), byId=new Map(visible.map(n=>[n.id,n]));
-  const neighbors=new Set([selectedNode]);
-  graphModel.edges.filter(e=>e.from===selectedNode||e.to===selectedNode).forEach(e=>{neighbors.add(e.from);neighbors.add(e.to);});
-  const edges=graphModel.edges.filter(e=>ids.has(e.from)&&ids.has(e.to)).map(e=>{
-    const a=byId.get(e.from),b=byId.get(e.to),highlight=e.from===selectedNode||e.to===selectedNode;
-    return `<line class="graph-edge ${e.kind} ${highlight?'highlight':''}" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${highlight?a.color:e.kind==='evidence'?'#b69cda':'#707070'}"><title>${esc(e.kind==='structure'?'Folder membership':e.kind==='group'?'Technology grouping':'Citation / evidence association')}</title></line>`;
-  }).join('');
-  const nodes=visible.map(n=>{
-    const matches=!query||(n.path||n.label).toLowerCase().includes(query);
-    const label=n.type==='directory'||n.id===selectedNode||Boolean(query&&matches);
-    return `<g class="graph-node ${n.inspected?'':'uninspected'} ${matches?'':'dimmed'} ${n.id===selectedNode?'selected':''}" transform="translate(${n.x} ${n.y})" data-node="${esc(n.id)}" tabindex="0" role="button" aria-label="${esc((n.path||n.label)+' / '+n.type+(n.inspected?' / inspected':''))}"><title>${esc(n.path||n.label)} / ${esc(n.type)}</title><circle class="selection" stroke="none" r="${n.radius+4}" fill="none"/><circle class="core" r="${n.radius}" fill="${n.color}" stroke="${n.inspected?'#ddd':n.color}"/>${label?`<text x="${n.radius+9}" y="4">${esc(n.label.length>30?n.label.slice(0,28)+'…':n.label)}</text>`:''}</g>`;
-  }).join('');
-  $('repo-graph').innerHTML=`<defs><filter id="node-glow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="2.3"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><g id="graph-scene">${edges}${nodes}</g>`;
-  applyGraphTransform();
-  $('graph-empty').hidden=graphModel.nodes.length>0;
-  $('graph-coverage').textContent=graphModel.nodes.length?`${graphModel.read} files read · ${graphModel.omitted?graphModel.omitted+' tree entries omitted':'bounded snapshot'}`:'Waiting for repository';
-  $('graph-legend').innerHTML=graphModel.groups.map((g,i)=>`<span class="legend-item"><svg viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="${RepoGraph.colors[i%6]}"/></svg>${esc(g)}</span>`).join('');
-  $('graph-node-list').innerHTML=visible.filter(n=>!query||(n.path||n.label).toLowerCase().includes(query)).map(n=>`<button data-node="${esc(n.id)}">${esc(n.path||n.label)}</button>`).join('');
-  $('node-count').textContent=visible.length;
+  Object.assign(graphSettings,{mode:graphMode,query:$('graph-search').value,inspected:$('inspected-only').checked});
+  const visible=RepoGraph.filter(graphModel,graphSettings);
+  graphView.update(graphSettings,selectedNode);graphView.setModel(visible);
+  $('graph-empty').hidden=visible.nodes.length>0;
+  $('graph-empty').querySelector('h3').textContent=graphModel.nodes.length?'No nodes match these filters.':'A repository becomes a map.';
+  $('graph-empty').querySelector('p').textContent=graphModel.nodes.length?'Adjust severity, score, orphan, or keyword filters.':'Start an investigation to explore files, dependencies, and the evidence connecting them.';
+  $('graph-coverage').textContent=graphModel.nodes.length?`${visible.nodes.length} visible · ${graphModel.read} files read${graphModel.omitted?' · '+graphModel.omitted+' tree entries omitted':''}`:'Waiting for repository';
+  const legend=graphSettings.colorMode==='heatmap'?Object.entries(RepoGraph.heat):graphSettings.colorMode==='layers'?[...new Set(visible.nodes.map(n=>n.layer))].map(name=>[name,RepoGraph.layerColor(name)]):graphModel.groups.map((g,i)=>[g,RepoGraph.colors[i%6]]);
+  $('graph-legend').innerHTML=legend.map(([name,color])=>`<span class="legend-item"><svg viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="${color}"/></svg>${esc(name)}</span>`).join('');
+  $('graph-node-list').innerHTML=visible.nodes.map(n=>`<button data-node="${esc(n.id)}">${esc(n.path||n.label)} / ${esc(n.type)}</button>`).join('');
+  $('node-count').textContent=visible.nodes.length;
+  document.querySelectorAll('[data-severity-count]').forEach(el=>{el.textContent=graphModel.nodes.filter(n=>RepoGraph.severity(RepoGraph.validScore(n.cvss))===el.dataset.severityCount).length;});
+  const count=visible.edges.filter(e=>e.finding).length;
+  $('path-pulse-note').textContent=`${count} candidate evidence link(s). Pulses do not establish an exploitable attack path. Reduced-motion preference disables pulses.`;
 }
-function applyGraphTransform(){ $('graph-scene')?.setAttribute('transform',`translate(${480*(1-graphZoom)+graphPan.x} ${200*(1-graphZoom)+graphPan.y}) scale(${graphZoom})`); }
 function selectGraphNode(id){selectedNode=id;renderGraph();renderInspector();}
 function codePreview(file, observation){
   const start=observation?.start_line||1;
@@ -325,6 +317,11 @@ function codePreview(file, observation){
 function renderInspector(){
   const n=graphModel.nodes.find(n=>n.id===selectedNode),a=current?.artifacts||{};
   if(!n){$('inspector-content').innerHTML='<div class="inspector-empty"><h3>Every connection has a source.</h3><p>Select a graph node to inspect its file, cited observations, and any associated external evidence.</p><p>Node colors distinguish groups, not risk.</p></div>';return;}
+  if(n.advisory){
+    const v=n.advisory,score=RepoGraph.validScore(n.cvss);
+    $('inspector-content').innerHTML=`<div class="inspector-chain">${esc(v.identifiers?.join(' · ')||v.id)}</div><section class="inspector-section"><h3><span class="step-box coral">01</span>Vulnerability advisory</h3><strong>${esc(v.title)}</strong><p>${esc(v.package?.ecosystem)} / ${esc(v.package?.name)}</p><p>${esc(v.version_assessment)}</p></section><section class="inspector-section"><h3><span class="step-box violet">02</span>Published CVSS</h3><p>${score===null?'Unscored / no published numeric score retained.':`CVSS ${score} / ${esc(RepoGraph.severity(score))}`}</p>${(v.cvss_ratings||[]).map(r=>`<p>${esc(r.provider)} / v${esc(r.version)} / ${esc(r.score)}<br><code>${esc(r.vector)}</code></p>`).join('')}<p>${(v.provenance||[]).map(p=>link(p.url,p.provider+' record')).join(' · ')}</p></section><section class="inspector-section"><h3><span class="step-box">03</span>Applicability remains unverified</h3><p>${esc(v.limitation||'An advisory does not establish an observed attack or target exposure.')}</p><p>Provider-reported fixes: ${esc((v.fixed_versions||[]).join(', ')||'Unknown')}</p></section><div class="inspector-actions"><button data-output="incidents">All research ↗</button></div>`;
+    return;
+  }
   const observations=a.profile?.observations||[],o=n.observation;
   const selectedObservations=o?[o]:n.type==='file'?observations.filter(x=>x.path===n.path):n.type==='technology'?observations.filter(x=>n.technology.evidence_ids.includes(x.id)):[];
   const ids=new Set(selectedObservations.map(x=>x.id));
@@ -360,19 +357,36 @@ function renderLiveStatus(){
   const lastTitle=$('activity-log').lastElementChild?.querySelector('.event-title');lastTitle?.classList.toggle('luminous',live);
 }
 $('new-investigation').addEventListener('click',()=>{document.body.classList.toggle('show-input');$('repo-url').focus();});
-$('graph-search').addEventListener('input',renderGraph);
+$('graph-search').addEventListener('input',()=>{$('control-query').value=$('graph-search').value;renderGraph();});
 $('inspected-only').addEventListener('change',renderGraph);
 ['structure','evidence'].forEach(mode=>$('graph-'+mode).addEventListener('click',()=>{graphMode=mode;['structure','evidence'].forEach(m=>{$('graph-'+m).classList.toggle('active',mode===m);$('graph-'+m).setAttribute('aria-pressed',String(mode===m));});renderGraph();}));
-$('zoom-in').addEventListener('click',()=>{graphZoom=Math.min(3,graphZoom+.2);applyGraphTransform();});
-$('zoom-out').addEventListener('click',()=>{graphZoom=Math.max(.5,graphZoom-.2);applyGraphTransform();});
-$('zoom-fit').addEventListener('click',()=>{graphZoom=1;graphPan={x:0,y:0};applyGraphTransform();});
-let drag=null,dragged=false;
-$('repo-graph').addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY,pan:{...graphPan},node:e.target.closest('[data-node]')?.dataset.node};dragged=false;$('repo-graph').setPointerCapture(e.pointerId);});
-$('repo-graph').addEventListener('pointermove',e=>{if(!drag)return;const rect=$('repo-graph').getBoundingClientRect(),dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(Math.abs(dx)+Math.abs(dy)>5)dragged=true;graphPan={x:drag.pan.x+dx/$('repo-graph').getScreenCTM().a,y:drag.pan.y+dy/$('repo-graph').getScreenCTM().d};applyGraphTransform();});
-$('repo-graph').addEventListener('pointerup',()=>{if(!dragged&&drag?.node)selectGraphNode(drag.node);drag=null;});
-$('repo-graph').addEventListener('pointercancel',()=>{drag=null;});
-$('repo-graph').addEventListener('keydown',e=>{const node=e.target.closest('[data-node]');if(node&&['Enter',' '].includes(e.key)){e.preventDefault();selectGraphNode(node.dataset.node);}});
+$('zoom-in').addEventListener('click',()=>graphView?.zoom(1.25));
+$('zoom-out').addEventListener('click',()=>graphView?.zoom(.8));
+$('zoom-fit').addEventListener('click',()=>graphView?.fit());
 document.addEventListener('click',e=>{const node=e.target.closest('button[data-node]');if(node)selectGraphNode(node.dataset.node);const output=e.target.closest('[data-output]');if(output){switchTab(output.dataset.output);scrollToElement($('report-section'));}});
+$('severity-groups').innerHTML=graphSettings.severities.map(name=>`<label class="severity-row"><input type="checkbox" data-severity="${name}" checked><span>${name==='Clean'?'Clean / CVSS 0':name}</span><output data-severity-count="${name}">0</output></label>`).join('');
+$('severity-groups').addEventListener('change',()=>{graphSettings.severities=[...document.querySelectorAll('[data-severity]:checked')].map(el=>el.dataset.severity);renderGraph();});
+$('control-query').addEventListener('input',()=>{$('graph-search').value=$('control-query').value;renderGraph();});
+$('show-orphans').addEventListener('change',()=>{graphSettings.orphans=$('show-orphans').checked;renderGraph();});
+$('graph-color-mode').addEventListener('change',()=>{graphSettings.colorMode=$('graph-color-mode').value;renderGraph();});
+$('graph-labels').addEventListener('change',()=>{graphSettings.labels=$('graph-labels').value;renderGraph();});
+$('path-pulses').addEventListener('change',()=>{graphSettings.pulses=$('path-pulses').checked;renderGraph();});
+[['min-cvss','minScore'],['node-scale','nodeScale'],['link-width','linkWidth'],['gravity','gravity'],['charge','charge'],['link-distance','distance'],['damping','damping']].forEach(([id,key])=>{
+  $(id).addEventListener('input',()=>{graphSettings[key]=Number($(id).value);$(id+'-value').textContent=$(id).value;renderGraph();});
+});
+$('reset-forces').addEventListener('click',()=>{[['gravity',.007],['charge',5000],['link-distance',90],['damping',.82]].forEach(([id,value])=>{$(id).value=value;$(id).dispatchEvent(new Event('input'));});});
+function selectControlTab(tab){
+  document.querySelectorAll('[data-control-tab]').forEach(el=>{const active=el.dataset.controlTab===tab;el.setAttribute('aria-selected',String(active));el.tabIndex=active?0:-1;$('control-'+el.dataset.controlTab).hidden=!active;});
+}
+document.querySelectorAll('[data-control-tab]').forEach(el=>el.addEventListener('click',()=>selectControlTab(el.dataset.controlTab)));
+document.querySelector('.control-tabs').addEventListener('keydown',e=>{
+  if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;
+  e.preventDefault();const tabs=[...document.querySelectorAll('[data-control-tab]')],i=tabs.indexOf(document.activeElement);
+  const target=tabs[e.key==='Home'?0:e.key==='End'?tabs.length-1:(i+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length];target.focus();selectControlTab(target.dataset.controlTab);
+});
+$('close-graph-controls').addEventListener('click',()=>{$('graph-controls').open=false;$('graph-controls').querySelector('summary').focus();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('graph-controls').open){$('graph-controls').open=false;$('graph-controls').querySelector('summary').focus();}});
+document.addEventListener('click',e=>{if($('graph-controls').open&&!e.target.closest('#graph-controls'))$('graph-controls').open=false;});
 $('view-report').addEventListener('click',()=>{switchTab('report');scrollToElement($('report-section'));});
 $('close-results').addEventListener('click',()=>{$('report-section').hidden=true;});
 setInterval(()=>{if(current&&!terminal.has(current.status))updateElapsed();},1000);
