@@ -55,9 +55,9 @@ The central question is:
 
 ## The workspace
 
-The black investigation workbench uses square panels, compact typography, thin straight connectors, and softly glowing graph nodes. Select a file or dependency to inspect its cited observations, external evidence, and reviewer assessment. The live timeline follows real server events; active status text uses an original CSS luminance animation with reduced-motion support.
+The black investigation workbench uses square panels, compact typography, thin straight connectors, and softly glowing graph nodes. Its high-DPI Canvas graph has spring physics, Coulomb repulsion, center gravity, velocity damping, draggable nodes, cursor-centered wheel zoom, touch pinch gestures, and hover spotlighting. Select a file or dependency to inspect its cited observations, external evidence, and reviewer assessment. The live timeline follows real server events; active status text uses an original CSS luminance animation with reduced-motion support.
 
-The graph shows folder membership and citation associations, not a complete call graph. It prioritizes inspected files and displays at most 160 file paths, with omissions disclosed. Colors identify groups, never vulnerability severity. See [workspace interactions and verification](docs/investigation-workbench.md).
+The graph shows folder membership and citation associations, not a complete call graph. It prioritizes inspected files and displays at most 160 file paths, with omissions disclosed. The floating Groups, Filters, Colors, Display, and Forces controls offer CVSS filters, orphan visibility, repository/service-layer/heatmap coloring, labels, visual scale, candidate-path pulses, and force sliders. Architecture colors identify repository groups; heatmap colors use published advisory scores. Missing scores stay Unscored, and Clean means CVSS 0 on an advisory, not a security clearance. See [workspace interactions and verification](docs/investigation-workbench.md).
 
 **The graph screenshot above uses saved public SwarmSim evidence from the documented live integration run. It does not establish a vulnerability or production exposure. The earlier report screenshot below uses the fictional offline example and shows the previous interface.**
 
@@ -497,7 +497,7 @@ node --check web/graph.js
 node --test tests/test_graph.cjs
 ```
 
-The current suite contains **100 Python test cases**, plus **7 Node.js graph tests** covering:
+The current suite contains **103 Python test cases**, plus **19 Node.js graph tests** covering:
 
 - Citation rejection, evidence-reference integrity, date handling, and unknowns.
 - Retention of existing defenses and rejected matches in controlled fixtures.
@@ -510,7 +510,7 @@ The current suite contains **100 Python test cases**, plus **7 Node.js graph tes
 
 API tests need permission to open and connect to loopback sockets. Temporary test data stays under ignored `test-output/`.
 
-**Verification scope:** all 100 Python tests and 7 graph tests pass after the investigation workbench update, including the complete mocked Gemini/Groq/Tavily workflow and bounded follow-up. Earlier checks exercised the browser workflow, downloads, responsive layout, and public GitHub ingestion. Live API smoke checks are separate from a complete repository review; run `--check-apis` to verify your effective configuration. The four-repository live integration results and rerun command are recorded in [live verification](docs/live-verification-2026-10-31.md). The current workbench screenshots use saved public repository artifacts; the earlier interface screenshots and included example report use synthetic offline fixtures. These checks are not a live-provider benchmark, a security audit, or evidence that generated recommendations are always correct.
+**Verification scope:** all 103 Python tests and 19 graph tests pass after the investigation workbench update, including the complete mocked Gemini/Groq/Tavily workflow and bounded follow-up. Earlier checks exercised the browser workflow, downloads, responsive layout, and public GitHub ingestion. Live API smoke checks are separate from a complete repository review; run `--check-apis` to verify your effective configuration. The four-repository live integration results and rerun command are recorded in [live verification](docs/live-verification-2026-10-31.md). The current workbench screenshots use saved public repository artifacts; the earlier interface screenshots and included example report use synthetic offline fixtures. These checks are not a live-provider benchmark, a security audit, or evidence that generated recommendations are always correct.
 
 ### Project structure
 
@@ -539,7 +539,7 @@ DevSecOps/
 │   └── __main__.py        Server and CLI entry points
 ├── web/
 │   ├── index.html         Repository review workspace
-│   ├── graph.js           Deterministic path and citation graph
+│   ├── graph.js           Canvas physics, gestures, filters, and citation graph
 │   ├── styles.css         Black workbench, responsive layout, luminous status text
 │   ├── app.js             Job submission, activity, evidence, and exports
 │   └── favicon.svg        Code-shield identity
