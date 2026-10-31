@@ -120,7 +120,7 @@ def reviewer_views(profile, research):
     incidents = []
     for incident in research['incidents'][:4]:
         incidents.append({key: [short(item, 120) for item in value[:3]] if isinstance(value, list)
-                          else short(value, 320) if isinstance(value, str) else value
+                          else short(value, 800 if key == 'source_quote' else 320) if isinstance(value, str) else value
                           for key, value in incident.items()})
     return ({'observations': observations,
              'technologies': [{'name': short(t['name'], 80), 'version': short(t['version'], 60),
