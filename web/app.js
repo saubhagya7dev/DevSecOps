@@ -54,6 +54,7 @@ function showToast(text) {
 }
 
 function switchTab(tab) {
+  $('report-section').hidden = false;
   activeTab = tab;
   document.querySelectorAll('.tab').forEach(el => { const selected = el.dataset.tab === tab; el.classList.toggle('active', selected); el.setAttribute('aria-selected', String(selected)); el.tabIndex = selected ? 0 : -1; });
   $('result-content').setAttribute('aria-labelledby', `tab-${tab}`);
@@ -150,7 +151,7 @@ function renderJob() {
   $('example-banner').hidden = current?.mode !== 'demo';
   $('job-error').hidden = !current?.error; $('job-error').textContent = current?.error || '';
   $('job-meta').hidden = !current;
-  $('job-meta').innerHTML = a.repository ? `${link(a.repository.url, current.mode === 'demo' ? 'Synthetic repository' : 'View on GitHub')}<span>·</span><span>commit ${esc(a.repository.commit.slice(0, 12))}</span><span>·</span><span>${esc(current.days)}-day publication window</span>` : current ? `<span>Analysis ${esc(current.id.slice(0, 8))}</span><span>·</span><span>${esc(current.days)}-day publication window</span>` : '';
+  $('job-meta').innerHTML = a.repository ? `${link(a.repository.url, current.mode === 'demo' ? 'Synthetic repository' : a.repository.name)}<span>·</span><span>commit ${esc(a.repository.commit.slice(0, 12))}</span><span>·</span><span>${esc(current.days)}-day publication window</span>` : current ? `<span>Analysis ${esc(current.id.slice(0, 8))}</span><span>·</span><span>${esc(current.days)}-day publication window</span>` : '';
   document.querySelectorAll('.agent-card').forEach(el => {
     const status = current?.stages[el.dataset.stage] || 'queued';
     el.className = `agent-card ${status}`;
@@ -165,19 +166,21 @@ function renderJob() {
   $('preparation-status').textContent = current ? `Preparation: ${current.stages.prepare} · Validation: ${current.stages.validation}` : '';
   $('incident-count').textContent = a.research ? a.research.incidents.length : '';
   $('finding-count').textContent = a.review ? a.review.findings.length : '';
-  renderResults(); updateElapsed();
+  renderResults(); renderGraph(); renderInspector(); updateElapsed();
 }
 
 function updateElapsed() {
   if (!current) { $('elapsed').textContent = '—'; return; }
   const end = terminal.has(current.status) ? new Date(current.updated_at).getTime() : Date.now();
   const secs = Math.max(0, Math.floor((end - new Date(current.created_at).getTime()) / 1000));
-  $('elapsed').textContent = `${Math.floor(secs / 60)}m ${String(secs % 60).padStart(2,'0')}s`;
+  $('elapsed').textContent = `${String(Math.floor(secs / 60)).padStart(2,'0')}:${String(secs % 60).padStart(2,'0')}`;
+  renderLiveStatus();
 }
 
 function renderEvents() {
+  renderGraph(); renderLiveStatus();
   const el = $('activity-log');
-  if (!eventItems.length) { el.innerHTML = '<div class="activity-empty"><strong>Waiting for the worker…</strong><p>Queued reviews begin when the current job finishes.</p></div>'; return; }
+  if (!eventItems.length) { el.innerHTML = current && terminal.has(current.status) ? '<div class="activity-empty"><strong>No activity events retained for this saved review.</strong><p>Its evidence and report remain available.</p></div>' : '<div class="activity-empty"><strong>Waiting for the worker…</strong><p>Queued reviews begin when the current job finishes.</p></div>'; return; }
   const stickToBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
   el.innerHTML = eventItems.slice(-150).map(e => `<div class="activity-event"><div class="event-top"><span>${esc(stageNames[e.stage] || e.stage)}</span><time>${new Date(e.at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}</time></div><div class="event-title">${esc(e.title)}</div><div class="event-detail">${esc(e.detail)}</div></div>`).join('');
   if (stickToBottom) el.scrollTop = el.scrollHeight;
@@ -197,12 +200,16 @@ async function reloadCurrent() {
 
 async function selectJob(id) {
   eventStream?.close(); clearTimeout(reloadTimer);
-  currentId = id; current = null; eventItems = [];
+  document.body.classList.remove('show-input');
+  currentId = id; current = null; eventItems = []; selectedNode = null; graphSignature = ''; graphZoom = 1; graphPan = {x:0,y:0}; streamConnected = false;
+  $('report-section').hidden = true;
   const u = new URL(location.href); u.searchParams.set('review', id); history.replaceState(null,'',u);
   $('activity-log').innerHTML = ''; renderEvents();
   await reloadCurrent();
   if (id !== currentId || !current) return;
   eventStream = new EventSource(`/api/jobs/${id}/events`);
+  eventStream.addEventListener('open', () => { if(id === currentId){streamConnected = true; renderLiveStatus();} });
+  eventStream.addEventListener('error', () => { if(id === currentId){streamConnected = false; renderLiveStatus();} });
   eventStream.addEventListener('activity', e => {
     if (id !== currentId) return;
     const item = JSON.parse(e.data);
@@ -211,7 +218,7 @@ async function selectJob(id) {
   });
   eventStream.addEventListener('finished', async () => {
     if (id !== currentId) return;
-    eventStream.close(); await reloadCurrent(); await loadHistory();
+    eventStream.close(); streamConnected = false; await reloadCurrent(); await loadHistory();
   });
 }
 
@@ -232,7 +239,7 @@ async function start(mode) {
   isSubmitting = true; $('start-button').disabled = true; $('demo-button').disabled = true;
   try {
     const result = await api('/api/jobs', {method:'POST', body:JSON.stringify({repository_url:$('repo-url').value.trim(), mode, days:Number($('window').value)})});
-    switchTab('overview'); await selectJob(result.id); await loadHistory();
+    activeTab = 'overview'; switchTab('overview'); $('report-section').hidden = true; await selectJob(result.id); await loadHistory();
     scrollToElement(document.querySelector('#workspace'));
   } catch (error) { $('form-error').textContent = error.message; $('form-error').hidden = false; }
   finally { isSubmitting = false; $('start-button').disabled = false; $('demo-button').disabled = false; }
@@ -243,7 +250,7 @@ function openDialog(html, kicker = 'WORKSPACE') { $('dialog-content').innerHTML 
 function showSettings() {
   const roles = Object.entries(config?.roles || {}).map(([role, setting]) => `<li><strong>${esc(role)}</strong> · ${esc(setting.provider)} · <code>${esc(setting.model)}</code></li>`).join('');
   const missing = (config?.missing_credentials || []).map(esc).join(', ');
-  openDialog(`<h2>Connect live intelligence.</h2><p>Gemini analyzes the repository. Python discovers advisories and original reports; Qwen on Groq interprets selected passages within quota limits. GPT OSS on Groq reviews the evidence. Credentials stay on the server.</p><ul>${roles}</ul><p><strong>Researcher token allowance:</strong> ${esc(config?.researcher_token_budget ?? 1000)}, including instructions, schema, and reserved output. Change <code>RESEARCHER_TOKEN_BUDGET</code> only after verifying your provider quota. Optional VCDB discovery is ${config?.vcdb_enabled ? "enabled" : "disabled"}.</p><ol><li>For a new installation, copy <code>.env.roles.example</code> to <code>.env</code>. Merge these settings into an existing file.</li><li>Set <code>GEMINI_API_KEY</code>, <code>GROQ_API_KEY</code>, and <code>TAVILY_API_KEY</code> locally. Never paste keys into this page or a chat.</li><li>Optionally set <code>GITHUB_TOKEN</code> for higher public API limits.</li><li>Restart <code>python run.py</code>, then refresh this page.</li></ol><p><strong>Current status:</strong> ${config?.live_ready ? 'All credentials configured; provider access has not been verified.' : `Missing: ${missing || 'configuration unavailable'}.`}</p><p>Public source excerpts are sent to Gemini and Groq. Generated search queries are sent to Tavily. Suspected credential lines are redacted, but redaction is not a guarantee. The offline example needs no keys.</p>`, 'CONFIGURATION');
+  openDialog(`<h2>Connect live intelligence.</h2><p>Gemini analyzes the repository. Python discovers advisories and original reports; Qwen on Groq interprets selected passages within quota limits. GPT OSS on Groq reviews the evidence. Credentials stay on the server.</p><ul>${roles}</ul><p><strong>Researcher token allowance:</strong> ${esc(config?.researcher_token_budget ?? 1000)}, including instructions, schema, and reserved output. Change <code>RESEARCHER_TOKEN_BUDGET</code> only after verifying your provider quota. Optional VCDB discovery is ${config?.vcdb_enabled ? "enabled" : "disabled"}.</p><ol><li>For a new installation, copy <code>.env.example</code> to <code>.env</code>. Merge these settings into an existing file.</li><li>Set <code>GEMINI_API_KEY</code>, <code>GROQ_API_KEY</code>, and <code>TAVILY_API_KEY</code> locally. Never paste keys into this page or a chat.</li><li>Optionally set <code>GITHUB_TOKEN</code> for higher public API limits.</li><li>Restart <code>python run.py</code>, then refresh this page.</li></ol><p><strong>Current status:</strong> ${config?.live_ready ? 'All credentials configured; provider access has not been verified.' : `Missing: ${missing || 'configuration unavailable'}.`}</p><p>Public source excerpts are sent to Gemini and Groq. Generated search queries are sent to Tavily. Suspected credential lines are redacted, but redaction is not a guarantee. The offline example needs no keys.</p>`, 'CONFIGURATION');
 }
 
 $('review-form').addEventListener('submit', e => { e.preventDefault(); start('live'); });
@@ -258,15 +265,117 @@ document.querySelector('.tabs').addEventListener('keydown', e => {
 });
 document.addEventListener('click', e => {
   const job = e.target.closest('[data-job]'); if (job) { $('info-dialog').close(); selectJob(job.dataset.job); scrollToElement(document.querySelector('.analysis-grid')); }
-  const ev = e.target.closest('[data-evidence]'); if (ev) { e.preventDefault(); switchTab('evidence'); scrollToElement(document.getElementById(`evidence-${ev.dataset.evidence}`), 'nearest'); }
+  const ev = e.target.closest('[data-evidence]'); if (ev) { e.preventDefault(); selectGraphNode('obs:'+ev.dataset.evidence); switchTab('evidence'); scrollToElement(document.getElementById(`evidence-${ev.dataset.evidence}`), 'nearest'); }
   const inc = e.target.closest('[data-incident]'); if (inc) { e.preventDefault(); switchTab('incidents'); }
 });
 $('settings-nav').addEventListener('click',showSettings); $('connection-status').addEventListener('click',showSettings);
 $('how-nav').addEventListener('click', () => openDialog('<h2>Three roles. One evidence chain.</h2><p><strong>01 · Repository Analyst</strong><br>Reads a bounded selection of code at a fixed commit. Maps technology, security-relevant behavior, and unknowns.</p><p><strong>02 · Incident Researcher</strong><br>Searches selected primary sources, retrieves pages, and extracts documented attack mechanisms and prerequisites.</p><p><strong>03 · Security Reviewer</strong><br>Checks the connection, looks for existing defenses, and recommends concrete actions and verification steps.</p><p><strong>Then: evidence validation</strong><br>Checks quote integrity and evidence references before assembling your report. These checks do not independently prove that every AI interpretation is correct.</p><p>A shared framework does not establish a shared weakness. Incomplete evidence is labeled. No code runs and no files in the analyzed repository are changed.</p>', 'THE WORKFLOW'));
 $('history-nav').addEventListener('click', async () => { await loadHistory(); openDialog(`<h2>Past reviews</h2>${recent.length ? historyRows(recent) : '<p>No reviews yet. Start with a public repository or try the offline example.</p>'}`, 'LOCAL HISTORY'); });
-$('workspace-nav').addEventListener('click', () => scrollToElement(document.querySelector('#workspace')));
+$('workspace-nav').addEventListener('click', () => { $('report-section').hidden = true; scrollToElement($('workspace')); });
 $('close-dialog').addEventListener('click', () => $('info-dialog').close());
 document.addEventListener('keydown', e => { if (e.key === '/' && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName) && !$('info-dialog').open) { e.preventDefault(); $('repo-url').focus(); } });
+
+// Small, event-driven workspace view. Glow is visual; graph relationships come from artifacts.
+let selectedNode = null, graphSignature = '', graphModel = {nodes:[],edges:[],groups:[]};
+let graphMode = 'structure', graphZoom = 1, graphPan = {x:0,y:0}, streamConnected = false;
+function renderGraph() {
+  if(typeof RepoGraph === 'undefined'){
+    $('graph-coverage').textContent='Graph asset unavailable';
+    $('graph-empty').hidden=false;
+    $('graph-empty').querySelector('h3').textContent='Restart the local server';
+    $('graph-empty').querySelector('p').textContent='Restart python run.py, then refresh to load the new graph asset.';
+    return;
+  }
+  const artifacts=current?.artifacts || {};
+  const signature=JSON.stringify([currentId,artifacts,eventItems.filter(e=>e.title==='Read repository file').map(e=>e.detail)]);
+  if(signature !== graphSignature){
+    graphModel=RepoGraph.build(artifacts,eventItems); graphSignature=signature;
+    if(!graphModel.nodes.some(n=>n.id===selectedNode)) selectedNode=graphModel.nodes.find(n=>n.type==='file'&&n.inspected)?.id || graphModel.nodes[0]?.id;
+  }
+  const query=$('graph-search').value.toLowerCase(), inspected=$('inspected-only').checked;
+  const visible=graphModel.nodes.filter(n=>(graphMode==='evidence'||['file','directory','repository','technology'].includes(n.type)) && (!inspected||n.inspected||n.type==='directory'));
+  const ids=new Set(visible.map(n=>n.id)), byId=new Map(visible.map(n=>[n.id,n]));
+  const neighbors=new Set([selectedNode]);
+  graphModel.edges.filter(e=>e.from===selectedNode||e.to===selectedNode).forEach(e=>{neighbors.add(e.from);neighbors.add(e.to);});
+  const edges=graphModel.edges.filter(e=>ids.has(e.from)&&ids.has(e.to)).map(e=>{
+    const a=byId.get(e.from),b=byId.get(e.to),highlight=e.from===selectedNode||e.to===selectedNode;
+    return `<line class="graph-edge ${e.kind} ${highlight?'highlight':''}" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${highlight?a.color:e.kind==='evidence'?'#b69cda':'#707070'}"><title>${esc(e.kind==='structure'?'Folder membership':e.kind==='group'?'Technology grouping':'Citation / evidence association')}</title></line>`;
+  }).join('');
+  const nodes=visible.map(n=>{
+    const matches=!query||(n.path||n.label).toLowerCase().includes(query);
+    const label=n.type==='directory'||n.id===selectedNode||Boolean(query&&matches);
+    return `<g class="graph-node ${n.inspected?'':'uninspected'} ${matches?'':'dimmed'} ${n.id===selectedNode?'selected':''}" transform="translate(${n.x} ${n.y})" data-node="${esc(n.id)}" tabindex="0" role="button" aria-label="${esc((n.path||n.label)+' / '+n.type+(n.inspected?' / inspected':''))}"><title>${esc(n.path||n.label)} / ${esc(n.type)}</title><circle class="selection" stroke="none" r="${n.radius+4}" fill="none"/><circle class="core" r="${n.radius}" fill="${n.color}" stroke="${n.inspected?'#ddd':n.color}"/>${label?`<text x="${n.radius+9}" y="4">${esc(n.label.length>30?n.label.slice(0,28)+'…':n.label)}</text>`:''}</g>`;
+  }).join('');
+  $('repo-graph').innerHTML=`<defs><filter id="node-glow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="2.3"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><g id="graph-scene">${edges}${nodes}</g>`;
+  applyGraphTransform();
+  $('graph-empty').hidden=graphModel.nodes.length>0;
+  $('graph-coverage').textContent=graphModel.nodes.length?`${graphModel.read} files read · ${graphModel.omitted?graphModel.omitted+' tree entries omitted':'bounded snapshot'}`:'Waiting for repository';
+  $('graph-legend').innerHTML=graphModel.groups.map((g,i)=>`<span class="legend-item"><svg viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="${RepoGraph.colors[i%6]}"/></svg>${esc(g)}</span>`).join('');
+  $('graph-node-list').innerHTML=visible.filter(n=>!query||(n.path||n.label).toLowerCase().includes(query)).map(n=>`<button data-node="${esc(n.id)}">${esc(n.path||n.label)}</button>`).join('');
+  $('node-count').textContent=visible.length;
+}
+function applyGraphTransform(){ $('graph-scene')?.setAttribute('transform',`translate(${480*(1-graphZoom)+graphPan.x} ${200*(1-graphZoom)+graphPan.y}) scale(${graphZoom})`); }
+function selectGraphNode(id){selectedNode=id;renderGraph();renderInspector();}
+function codePreview(file, observation){
+  const start=observation?.start_line||1;
+  const lines=file?file.content.split('\n').slice(Math.max(0,start-3),observation?Math.min(observation.end_line+2,start+60):15):observation?.quote?.split('\n')||[];
+  const offset=file?Math.max(1,start-2):start;
+  return lines.length?`<div class="code-caption"><span>${esc(file?.path||observation.path)}</span><span>L${start}${observation?'–L'+observation.end_line:''}</span></div><pre class="code-lines">${lines.map((line,i)=>`<span>${offset+i}</span>${esc(line)}`).join('\n')}</pre>`:'<p>This file is in the returned tree but its content has not been inspected.</p>';
+}
+function renderInspector(){
+  const n=graphModel.nodes.find(n=>n.id===selectedNode),a=current?.artifacts||{};
+  if(!n){$('inspector-content').innerHTML='<div class="inspector-empty"><h3>Every connection has a source.</h3><p>Select a graph node to inspect its file, cited observations, and any associated external evidence.</p><p>Node colors distinguish groups, not risk.</p></div>';return;}
+  const observations=a.profile?.observations||[],o=n.observation;
+  const selectedObservations=o?[o]:n.type==='file'?observations.filter(x=>x.path===n.path):n.type==='technology'?observations.filter(x=>n.technology.evidence_ids.includes(x.id)):[];
+  const ids=new Set(selectedObservations.map(x=>x.id));
+  const findings=(a.review?.findings||[]).filter(f=>f.evidence_ids.some(e=>ids.has(e))||n.incident&&f.incident_ids.includes(n.incident.id));
+  const incidentIds=new Set(findings.flatMap(f=>f.incident_ids));
+  if(n.incident)incidentIds.add(n.incident.id);
+  const incidents=(a.research?.incidents||[]).filter(i=>incidentIds.has(i.id));
+  const path=o?.path||n.path, file=(a.repository?.files||[]).find(f=>f.path===path);
+  const children=n.type==='directory'?graphModel.nodes.filter(x=>x.group===n.group&&x.type==='file'):[];
+  $('inspector-content').innerHTML=`<div class="inspector-chain">${esc(path||n.label)}${ids.size?' / '+esc([...ids].join(' · ')):''}</div>
+    <section class="inspector-section"><h3><span class="step-box coral">01</span>Repository observation</h3>${n.type==='source'?'<p>External source selected. Repository associations appear only when a finding cites both sides.</p>':`<strong>${esc(n.label)}</strong>${n.type==='directory'?`<p>Directory membership, derived from returned repository paths.</p><div class="inspection-links">${children.slice(0,20).map(c=>`<button data-node="${esc(c.id)}">${esc(c.label)}</button>`).join('')}</div>`:selectedObservations.map(x=>`<p>${esc(x.claim)}</p><div class="source-kind">${esc(x.id)} / ${esc(x.kind)} / L${x.start_line}–L${x.end_line}</div>`).join('')||'<p>No verified observations for this selection yet.</p>'}${path?codePreview(file,selectedObservations[0]):''}`}</section>
+    <section class="inspector-section"><h3><span class="step-box violet">02</span>External evidence</h3>${incidents.length?incidents.map(i=>{const s=(a.research?.sources||[]).find(x=>x.id===i.source_id);return `<div class="source-kind">${esc(i.id)} / ${esc(i.source_type)}</div><p>${esc(i.title)}</p><blockquote>${esc(i.source_quote)}</blockquote>${s?link(s.url,s.title):''}<p class="note">${esc(i.recency||'Date unverified')} · Applicability requires reviewer assessment.</p>`;}).join(''):'<p>No external evidence has been linked to this selection. A shared technology alone does not establish exposure.</p>'}</section>
+    <section class="inspector-section"><h3><span class="step-box">03</span>Reviewer assessment</h3>${findings.length?findings.map(f=>`<div class="source-kind">${esc(f.id)} / ${esc(f.classification)}</div><p><strong>${esc(f.title)}</strong></p><p>${esc(f.action)}</p><p>Verify: ${esc(f.verification)}</p>${f.missing_information?.length?`<p>Unknown: ${esc(f.missing_information.join('; '))}</p>`:''}`).join(''):`<p>${a.review?'No accepted recommendation is linked to this selection.':'Reviewer assessment is pending. Deployment exposure remains unknown.'}</p>`}<p id="inspector-live-status"></p></section>
+    <div class="inspector-actions"><button data-output="evidence">All evidence ↗</button><button data-output="recommendations">Recommendations ↗</button></div>`;
+  renderLiveStatus();
+}
+function renderLiveStatus(){
+  const running=current&&!terminal.has(current.status), latest=eventItems.at(-1);
+  const stage=Object.keys(stageNames).find(s=>current?.stages[s]==='running');
+  const operation=latest?.title==='Agent working'?({analyst:'Analyzing repository…',researcher:'Interpreting source evidence…',reviewer:'Assessing evidence and prerequisites…'}[stage]||latest.title):latest?.title;
+  const status=running?(operation||'Waiting for the worker…'):current?$('job-state').textContent:'No investigation running.';
+  const live=Boolean(running&&streamConnected);
+  $('operation-status').textContent=status;
+  $('operation-status').classList.toggle('luminous',live);
+  $('following-stage').textContent='/ '+(stage?stageNames[stage]:current?'Investigation saved':'Awaiting repository');
+  $('stream-state').textContent=running?(streamConnected?'Connected':'Reconnecting…'):current?'Saved activity':'Not connected';
+  const age=latest?Math.max(0,Math.floor((Date.now()-Date.parse(latest.at))/1000)):null;
+  $('event-age').textContent=running&&age!==null?`Last update ${age}s ago`:'';
+  $('reviewer-state').textContent=(current?.stages.reviewer||'waiting').toUpperCase();
+  $('reviewer-detail').textContent=current?.artifacts?.review?.summary || (current?.stages.reviewer==='running'?'Review request in progress. Awaiting the next provider update.':'Starts after evidence extraction and citation checks.');
+  $('view-report').disabled=!current?.report;
+  const label=$('inspector-live-status');if(label){label.textContent=stage==='reviewer'&&running?status:'';label.classList.toggle('luminous',live&&stage==='reviewer');}
+  const lastTitle=$('activity-log').lastElementChild?.querySelector('.event-title');lastTitle?.classList.toggle('luminous',live);
+}
+$('new-investigation').addEventListener('click',()=>{document.body.classList.toggle('show-input');$('repo-url').focus();});
+$('graph-search').addEventListener('input',renderGraph);
+$('inspected-only').addEventListener('change',renderGraph);
+['structure','evidence'].forEach(mode=>$('graph-'+mode).addEventListener('click',()=>{graphMode=mode;['structure','evidence'].forEach(m=>{$('graph-'+m).classList.toggle('active',mode===m);$('graph-'+m).setAttribute('aria-pressed',String(mode===m));});renderGraph();}));
+$('zoom-in').addEventListener('click',()=>{graphZoom=Math.min(3,graphZoom+.2);applyGraphTransform();});
+$('zoom-out').addEventListener('click',()=>{graphZoom=Math.max(.5,graphZoom-.2);applyGraphTransform();});
+$('zoom-fit').addEventListener('click',()=>{graphZoom=1;graphPan={x:0,y:0};applyGraphTransform();});
+let drag=null,dragged=false;
+$('repo-graph').addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY,pan:{...graphPan},node:e.target.closest('[data-node]')?.dataset.node};dragged=false;$('repo-graph').setPointerCapture(e.pointerId);});
+$('repo-graph').addEventListener('pointermove',e=>{if(!drag)return;const rect=$('repo-graph').getBoundingClientRect(),dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(Math.abs(dx)+Math.abs(dy)>5)dragged=true;graphPan={x:drag.pan.x+dx/$('repo-graph').getScreenCTM().a,y:drag.pan.y+dy/$('repo-graph').getScreenCTM().d};applyGraphTransform();});
+$('repo-graph').addEventListener('pointerup',()=>{if(!dragged&&drag?.node)selectGraphNode(drag.node);drag=null;});
+$('repo-graph').addEventListener('pointercancel',()=>{drag=null;});
+$('repo-graph').addEventListener('keydown',e=>{const node=e.target.closest('[data-node]');if(node&&['Enter',' '].includes(e.key)){e.preventDefault();selectGraphNode(node.dataset.node);}});
+document.addEventListener('click',e=>{const node=e.target.closest('button[data-node]');if(node)selectGraphNode(node.dataset.node);const output=e.target.closest('[data-output]');if(output){switchTab(output.dataset.output);scrollToElement($('report-section'));}});
+$('view-report').addEventListener('click',()=>{switchTab('report');scrollToElement($('report-section'));});
+$('close-results').addEventListener('click',()=>{$('report-section').hidden=true;});
+setInterval(()=>{if(current&&!terminal.has(current.status))updateElapsed();},1000);
 
 async function initialize() {
   renderJob();
