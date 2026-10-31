@@ -84,6 +84,23 @@ class ResearchFlowTests(unittest.TestCase):
         self.assertEqual(result['coverage']['extraction_attempts'], 2)
         self.assertNotIn('profile', client.requests[-1])
 
+    def test_blocked_optional_planning_does_not_mislabel_completed_discovery(self):
+        class BlockedPlanner(FixtureClient):
+            def call(self, role, instructions, data, schema, **kwargs):
+                if schema is contracts.SEARCH_PLAN:
+                    raise RequestBudgetError('Configured conservative token allowance is 1000')
+                return super().call(role, instructions, data, schema, **kwargs)
+        client = BlockedPlanner([[], []], [])
+        result, attempts = self.run_flow(client, {})
+        self.assertEqual(result['coverage']['query_planning'], 'deterministic fallback')
+        self.assertEqual(client.search_calls, 2)
+        self.assertEqual(result['status'], 'completed')
+        self.assertEqual(result['error'], '')
+        self.assertEqual(result['outcome'], 'no relevant incident found within searched coverage')
+        self.assertEqual(result['coverage']['extraction_attempts'], 0)
+        self.assertTrue(any('1000' in value for value in result['research_limitations']))
+        self.assertEqual(attempts, [])
+
     def test_bad_quote_is_rejected_before_deciding_to_fallback(self):
         bad = incident('S1', 'A fabricated supporting quotation that does not exist anywhere in the stored source text.')
         client = FixtureClient([[{'url': URL_A}], [{'url': URL_B}]], [[bad], [incident('S2', TEXT_B)]])
