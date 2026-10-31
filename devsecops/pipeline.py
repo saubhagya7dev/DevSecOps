@@ -135,7 +135,7 @@ class Runner:
                           'Security review was skipped because no supported incidents were available. This is not a declaration of security.',
                           'findings': [], 'existing_defenses': [], 'rejected_matches': [],
                           'questions': ['Review source availability and provider limits before drawing security conclusions.'], 'followup_requests': [],
-                          'status': 'skipped', 'reason': research.get('error', 'No supported incident evidence.')}
+                          'status': 'skipped', 'reason': research.get('error') or 'No supported incident evidence was acquired within the searched coverage.'}
             review, rejected = validate_review(review, profile, research)
             warnings.extend(rejected)
             if demo:
