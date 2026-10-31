@@ -102,7 +102,7 @@ def make_handler(store, runner, token):
                         pass
                     return
                 return self.send(200, job)
-            paths = {'/': 'index.html', '/app.js': 'app.js', '/styles.css': 'styles.css', '/favicon.svg': 'favicon.svg'}
+            paths = {'/': 'index.html', '/app.js': 'app.js', '/graph.js': 'graph.js', '/styles.css': 'styles.css', '/favicon.svg': 'favicon.svg'}
             if route.path in paths:
                 path = ROOT / 'web' / paths[route.path]
                 return self.send(200, path.read_bytes(), mimetypes.guess_type(path)[0] or 'application/octet-stream')
