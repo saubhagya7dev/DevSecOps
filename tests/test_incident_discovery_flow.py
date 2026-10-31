@@ -93,7 +93,7 @@ class ResearchFlowTests(unittest.TestCase):
         client = BlockedPlanner([[], []], [])
         result, attempts = self.run_flow(client, {})
         self.assertEqual(result['coverage']['query_planning'], 'deterministic fallback')
-        self.assertEqual(client.search_calls, 2)
+        self.assertEqual(client.search_calls, 3)
         self.assertEqual(result['status'], 'completed')
         self.assertEqual(result['error'], '')
         self.assertEqual(result['outcome'], 'no relevant incident found within searched coverage')
