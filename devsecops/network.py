@@ -6,6 +6,7 @@ import re
 import socket
 import ssl
 import time
+from datetime import datetime, timezone
 from urllib.parse import urljoin, urlsplit
 
 
@@ -17,7 +18,7 @@ class FetchError(ValueError):
         self.limit_kind = limit_kind
 
 
-def upstream_error(response):
+def upstream_error(response, host=None):
     """Extract rate-limit numbers only; never expose provider bodies or organization IDs."""
     status = response.status
     retry_after = token_limit = requested = None
@@ -29,6 +30,17 @@ def upstream_error(response):
             retry_after = value
     except (ValueError, TypeError):
         pass
+    if host == 'api.github.com' and status in (403, 429) and response.getheader('X-RateLimit-Remaining') == '0':
+        reset = response.getheader('X-RateLimit-Reset', '')
+        reset_label = ''
+        if isinstance(reset, str) and re.fullmatch(r'\d{1,11}', reset):
+            try:
+                reset_label = ' Resets at ' + datetime.fromtimestamp(int(reset), timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC') + '.'
+            except (ValueError, OverflowError, OSError):
+                pass
+        return FetchError('GitHub API rate limit exhausted (0 requests remaining).' + reset_label +
+                          ' Wait for the reset before retrying. Configure GITHUB_TOKEN for a larger authenticated allowance, then restart the server.',
+                          status=status, retry_after=retry_after, limit_kind='github_requests')
     if status == 429:
         try:
             body = json.loads(response.read(8192))
@@ -121,7 +133,7 @@ def fetch(url, *, headers=None, body=None, limit=2_000_000, timeout=35, redirect
                 url = urljoin(url, location)
                 continue
             if response.status >= 400:
-                raise upstream_error(response)
+                raise upstream_error(response, host=host)
             if response.getheader('Content-Encoding', 'identity') != 'identity':
                 raise FetchError('Compressed responses are not supported by this bounded reader.')
             length = response.getheader('Content-Length')
