@@ -121,13 +121,13 @@ Create a local `.env` file. **If one already exists, edit it directly instead of
 **PowerShell**
 
 ```powershell
-Copy-Item .env.roles.example .env
+Copy-Item .env.example .env
 ```
 
 **macOS / Linux**
 
 ```sh
-cp .env.roles.example .env
+cp .env.example .env
 ```
 
 Edit the file locally:
@@ -323,8 +323,7 @@ flowchart TB
 
 The model does not decide its own permissions. Repository access, page retrieval, storage, and stage transitions are controlled by backend code. The MVP has no shell tool, MCP server, A2A protocol, vector database, or independent agent processes.
 
-<details>
-<summary><strong>Live updates, refresh recovery, and report delivery</strong></summary>
+### *Live updates, refresh recovery, and report delivery*
 
 <br>
 
@@ -360,8 +359,6 @@ sequenceDiagram
 ```
 
 The activity feed shows observable operations and concise explanations—not private model reasoning. Closing a browser tab does not cancel the job. Restarting the server marks interrupted jobs as failed while retaining saved artifacts.
-
-</details>
 
 ## Reading a report
 
@@ -545,7 +542,7 @@ DevSecOps/
 ├── docs/
 │   ├── assets/            Repository-hosted product screenshots
 │   └── examples/          Fictional example report and JSON artifacts
-├── .env.roles.example     Environment template; use placeholders only
+├── .env.example     Environment template; use placeholders only
 ├── MVP.md                 Product scope and acceptance criteria
 ├── pyproject.toml         Python project metadata
 └── run.py                 Simple launcher
