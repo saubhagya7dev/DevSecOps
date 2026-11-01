@@ -13,12 +13,14 @@ from .demo import DEMO_URL
 from .pipeline import Runner
 from .repository import parse_repo
 from .store import Store
+from .cache import ResearchCache
 
 TERMINAL = {'completed', 'partial', 'failed', 'cancelled'}
 
 
-def make_handler(store, runner, token):
+def make_handler(store, runner, token, cache=None):
     submission_lock = threading.Lock()
+    cache = cache if cache is not None else ResearchCache()
     class Handler(BaseHTTPRequestHandler):
         protocol_version = 'HTTP/1.1'
 
@@ -62,6 +64,11 @@ def make_handler(store, runner, token):
                                        'token': token, 'demo_url': DEMO_URL})
             if route.path == '/api/jobs':
                 return self.send(200, store.list())
+            if route.path == '/api/storage':
+                try:
+                    return self.send(200, {'history': store.storage_stats(), 'cache': cache.storage_stats()})
+                except (OSError, ValueError):
+                    return self.send(500, {'error': 'Local storage statistics are unavailable.'})
             match = re.fullmatch(r'/api/jobs/([a-f0-9]{32})(?:/(events|report|artifacts))?', route.path)
             if match:
                 job_id, resource = match.groups()
@@ -93,7 +100,8 @@ def make_handler(store, runner, token):
                                 self.wfile.write(f"id: {after}\nevent: activity\ndata: {json.dumps(event)}\n\n".encode())
                             self.wfile.write(b': heartbeat\n\n')
                             self.wfile.flush()
-                            if store.get(job_id)['status'] in TERMINAL and not store.events(job_id, after):
+                            saved = store.get(job_id)
+                            if not saved or (saved['status'] in TERMINAL and not store.events(job_id, after)):
                                 self.wfile.write(b'event: finished\ndata: {}\n\n')
                                 self.wfile.flush()
                                 break
@@ -118,6 +126,22 @@ def make_handler(store, runner, token):
                 data = json.loads(self.rfile.read(length))
                 if not isinstance(data, dict):
                     raise ValueError('Expected a JSON object.')
+                if self.path == '/api/storage/clear':
+                    scope = data.get('scope')
+                    if scope not in ('history', 'cache', 'all') or data.get('confirmation') != 'CLEAR':
+                        return self.send(400, {'error': 'Choose history, cache, or all and type CLEAR to confirm.'})
+                    with submission_lock:
+                        if store.storage_stats()['active']:
+                            return self.send(409, {'error': 'Finish or cancel active investigations before clearing local data.'})
+                        try:
+                            result = {}
+                            if scope in ('cache', 'all'):
+                                result['cache'] = cache.clear()
+                            if scope in ('history', 'all'):
+                                result['history'] = store.clear_history()
+                            return self.send(200, {'cleared': result})
+                        except (ValueError, OSError):
+                            return self.send(500, {'error': 'Local data could not be fully cleared. Reload storage details and retry.'})
                 if self.path == '/api/jobs':
                     mode = data.get('mode', 'live')
                     if mode not in ('live', 'demo'):
