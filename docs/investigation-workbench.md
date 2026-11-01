@@ -37,18 +37,39 @@ The simulation reheats after manipulation and settles to rest. Empty/fully filte
 
 ## Inspector and live progress
 
+The desktop workspace pairs a square graph on the left with Live Investigation above Evidence Inspector on the right. On narrow screens these panels stack, and the graph keeps its square aspect ratio. The opening explanation describes the product before asking for a repository URL.
+
+Five clickable stages show snapshot preparation, Repository Analyst, Incident Researcher, Security Reviewer, and report validation. Each agent card shows its actual state, purpose, latest operation, saved output counts, and an Inspect output action. Counts reflect retained artifacts rather than simulated progress. Failed, skipped, cancelled, and partial work remain distinct.
+
+Workflow opens an interactive map with each stage's input, work, output, and an excerpt from the selected investigation. The retrieval explainer describes primary-source discovery, passage grounding, and citation checks. This implementation ranks bounded passages in Python; it has no embedding index or vector database.
+
 The inspector shows selected source code, verified observation IDs and line ranges, associated external passages, and accepted reviewer recommendations. Missing associations stay explicitly absent. Selecting a graph node never runs target code or performs another model request.
 
 The timeline consumes existing server-sent activity events. The original CSS luminance treatment highlights active operation text while the event connection is open. It stops for completed, partial, failed, and cancelled jobs or a disconnected stream. A last-update counter reports event freshness; it is not provider token streaming or private model reasoning. The animation is disabled by `prefers-reduced-motion`.
 
-The reviewer tray reflects the actual reviewer stage. Report download becomes available only when a saved report exists. History, partial results, rejected matches, cancellation, offline examples, and report/JSON exports remain accessible. A saved review starts with its URL form collapsed; New investigation opens it again.
+The reviewer tray reflects the actual reviewer stage. A prominent outcome panel distinguishes a complete investigation from a partial report, failure, or cancellation. Report actions become available only when a saved report exists; partial reports explicitly direct users to their limitations. The same report action is available beside the live timeline.
+
+After a terminal result, New investigation receives a subtle rectangular purple pulse. Reduced-motion users receive a static highlight. Selecting it resets the completed workspace and focuses a fresh URL input. During an active run it opens the form without cancelling or detaching that run. History, rejected matches, cancellation, offline examples, and report/JSON exports remain accessible.
+
+![Square graph with live investigation and evidence on the right](assets/investigation-layout.png)
+
+![Interactive workflow and retrieval grounding](assets/workflow-explainer.png)
+
+## Local history and research cache
+
+Manage history & cache is available beside recent investigations and in Local workspace. The dialog shows stored investigation/event counts and cache size. Users can clear history (including saved reports, artifacts, and events), the research cache, or both. It requires typing `CLEAR` and blocks deletion while any investigation is queued, running, or cancelling, including jobs outside the latest 50 displayed records.
+
+`GET /api/storage` returns counts. `POST /api/storage/clear` requires the existing same-origin request token, an explicit `history`, `cache`, or `all` scope, and `confirmation: "CLEAR"`. Job submission and cleanup share a lock. Cache cleanup only removes owned digest-named cache files and temporary entries; it skips symlinks and unrelated files. SQLite history is transactionally removed and compaction is attempted. This is application cleanup, not a forensic erasure guarantee.
+
+There is no separate agent memory or vector database. Cleanup preserves credentials, model settings, repository files, and exports saved outside the application's history. Deletion has no application undo.
 
 ## Verification
 
-- 103 Python tests pass, including same-origin serving of the graph asset.
+- 111 Python tests pass, including same-origin serving of the graph asset and eight storage cleanup tests covering scope isolation, active-job guards, request protection, and unrelated-file preservation.
 - Nineteen dependency-free Node tests cover file provenance, preparation events, technology citations, absent incident matches, accepted finding associations, bounded trees, stable finite layouts, score boundaries, orphan filtering, force stability, drag offsets/cancellation, cursor-anchored zoom, two-pointer pinch calculations, empty-graph idling, and 2× pixel-density sizing.
 - Browser checks exercised graph search and selection, evidence mode, offline execution, report tabs, active status animation, cancellation, and terminal animation cleanup. CVSS groups, heatmap, numeric thresholds, CVE search, display options, and force reset were also checked using a clearly labeled synthetic local fixture. No browser console errors were observed during these checks. Pointer drag/cancellation and pinch geometry are covered by deterministic handler tests; physical multi-touch hardware has not been tested.
 - Responsive controls and a populated 390px-wide viewport are checked for horizontal overflow. Desktop and mobile screenshots were captured from the implementation under `docs/assets/investigation-*.png`.
+- The revised experience was checked with a complete offline run: all three role states, actual operation events, report access, terminal animation cleanup, and the fresh-investigation reset. The storage dialog's confirmation behavior was checked without deleting user history; deletion tests used disposable fixtures.
 - UI verification used an isolated local SQLite store with saved public review artifacts and offline fixtures. It consumed no hosted-model or GitHub quota and did not modify existing review records.
 
 The animation is an original CSS implementation of the requested luminous progress treatment; React Bits Pro source was not copied or bundled. Mockup graph labels and illustrative connections are not hardcoded into real reviews. Actual layouts depend on the inspected repository.
