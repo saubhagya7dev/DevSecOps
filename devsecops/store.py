@@ -107,3 +107,29 @@ class Store:
             if job['status'] in ('queued', 'running', 'cancelling'):
                 stages = {k: ('failed' if v == 'running' else 'skipped' if v == 'queued' else v) for k, v in job['stages'].items()}
                 self.update(job['id'], status='failed', stages=stages, error='Server restarted during this analysis. Start a new review; saved evidence remains available.')
+
+    def storage_stats(self):
+        with self.connect() as db:
+            jobs = [json.loads(r[0]) for r in db.execute('SELECT data FROM jobs')]
+            events = db.execute('SELECT count(*) FROM events').fetchone()[0]
+        return {'investigations': len(jobs), 'events': events,
+                'active': sum(j['status'] not in ('completed', 'partial', 'failed', 'cancelled') for j in jobs)}
+
+    def clear_history(self):
+        """Clear saved reports/evidence/events, without deleting rows used by a worker."""
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            jobs = [json.loads(r[0]) for r in db.execute('SELECT data FROM jobs')]
+            if any(j['status'] not in ('completed', 'partial', 'failed', 'cancelled') for j in jobs):
+                raise ValueError('Finish or cancel active investigations before clearing local data.')
+            events = db.execute('SELECT count(*) FROM events').fetchone()[0]
+            db.execute('DELETE FROM events')
+            db.execute('DELETE FROM jobs')
+        try:
+            with self.connect() as db:
+                db.execute('VACUUM')
+                db.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+        except sqlite3.OperationalError:
+            # Logical deletion succeeded; SQLite can reuse free pages if a reader delayed compaction.
+            pass
+        return {'investigations': len(jobs), 'events': events}
