@@ -14,7 +14,7 @@ One public GitHub URL. Three AI roles. A traceable path from source code to prev
 ![Runtime dependencies](https://img.shields.io/badge/runtime_dependencies-0-2EA44F)
 [![Version](https://img.shields.io/badge/version-0.1.8-green)](pyproject.toml)
 
-[Quick start](#quick-start) · [The workspace](#the-workspace) · [How it works](#how-it-works) · [Architecture](#architecture) · [Example report](docs/examples/offline-report.md)
+[Quick start](#quick-start) · [How it works](#how-it-works) · [Architecture](#architecture) · [Example report](docs/examples/offline-report.md)
 
 </div>
 
@@ -48,27 +48,7 @@ The central question is:
 
 ---
 
-## The workspace
-
-The black investigation workbench uses square panels, compact typography, thin straight connectors, and softly glowing graph nodes. Its high-DPI Canvas graph has spring physics, Coulomb repulsion, center gravity, velocity damping, draggable nodes, cursor-centered wheel zoom, touch pinch gestures, and hover spotlighting. Select a file or dependency to inspect its cited observations, external evidence, and reviewer assessment. The live timeline follows real server events; active status text uses an original CSS luminance animation with reduced-motion support.
-
-A square graph sits beside Live Investigation and Evidence Inspector. Five clickable stages and three agent cards expose actual work, retained output counts, and evidence inspection. The interactive Workflow explains each handoff and how retrieved passages ground the agents, with excerpts from the current run. This MVP ranks bounded passages in Python; it does not use a vector database. A prominent outcome panel links to the final report, distinguishes incomplete results, and highlights New investigation after a run ends.
-
-Use **Manage history & cache** beside recent investigations or in Local workspace to clear saved investigations, research cache, or both. Cleanup requires typing `CLEAR` and is blocked during active work. History cleanup removes saved reports, evidence, and events with no application undo; credentials, model settings, repository files, and separately downloaded exports are preserved.
-
-The graph shows folder membership and citation associations, not a complete call graph. It prioritizes inspected files and displays at most 160 file paths, with omissions disclosed. The floating Groups, Filters, Colors, Display, and Forces controls offer CVSS filters, orphan visibility, repository/service-layer/heatmap coloring, labels, visual scale, candidate-path pulses, and force sliders. Architecture colors identify repository groups; heatmap colors use published advisory scores. Missing scores stay Unscored, and Clean means CVSS 0 on an advisory, not a security clearance. See [workspace interactions and verification](docs/investigation-workbench.md).
-
-**The graph screenshot above uses saved public SwarmSim evidence from the documented live integration run. It does not establish a vulnerability or production exposure. The earlier report screenshot below uses the fictional offline example and shows the previous interface.**
-
-| View | What you can inspect |
-| --- | --- |
-| **Overview** | Technology, application components, cited observations, coverage, and open questions. |
-| **Incidents** | Attack mechanisms, prerequisites, source passages, victims when documented, and separate dates. |
-| **Recommendations** | Relevance classifications, impact, confidence, counterevidence, actions, and verification steps. |
-| **Evidence** | Inspected file references, code excerpts, skipped files, and validation results. |
-| **Report** | Markdown preview, download, clipboard copy, and JSON artifact export. |
-
-## Quick start
+## *Quick start*
 
 ### Requirements
 
