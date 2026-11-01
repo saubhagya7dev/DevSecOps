@@ -63,6 +63,16 @@ Manage history & cache is available beside recent investigations and in Local wo
 
 There is no separate agent memory or vector database. Cleanup preserves credentials, model settings, repository files, and exports saved outside the application's history. Deletion has no application undo.
 
+## Side-by-side report preview
+
+The Report tab pairs a numbered, read-only Markdown source pane with a formatted preview. Each pane scrolls independently; the enabled-by-default Sync scrolling option links their relative scroll positions in either direction. This is proportional synchronization rather than exact source-line mapping. Narrow screens stack the panes. Copy report and Download Markdown retain the original report text.
+
+The locally served renderer supports the report writer's headings, lists, paragraphs, emphasis, inline/fenced code, quotes, and HTTPS citation links. Raw HTML remains text, external images are not fetched, and executable/credential-bearing link targets are rejected. It is a report-specific Markdown subset, not a full CommonMark editor or VS Code extension runtime.
+
+![Markdown source and rendered report side by side](assets/report-split-preview.png)
+
+Run `node --test tests/test_markdown.cjs tests/test_graph.cjs` for the 23 JavaScript tests, including four report-rendering and unsafe-content checks.
+
 ## Verification
 
 - 111 Python tests pass, including same-origin serving of the graph asset and eight storage cleanup tests covering scope isolation, active-job guards, request protection, and unrelated-file preservation.
