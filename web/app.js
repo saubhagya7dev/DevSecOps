@@ -279,7 +279,7 @@ document.addEventListener('keydown', e => { if (e.key === '/' && !['INPUT','TEXT
 let selectedNode = null, graphSignature = '', graphModel = {nodes:[],edges:[],groups:[]};
 let graphMode = 'structure', streamConnected = false;
 let graphView=null;
-const graphSettings={query:'',mode:'structure',inspected:false,orphans:true,minScore:0,severities:['Critical','High','Medium','Low','Clean','Unscored'],colorMode:'architecture',nodeScale:1,linkWidth:1,labels:'large',pulses:false,gravity:.007,charge:5000,distance:90,damping:.82};
+const graphSettings={query:'',mode:'structure',inspected:false,orphans:true,minScore:0,severities:['Critical','High','Medium','Low','Clean','Unscored'],colorMode:'architecture',nodeScale:1,linkWidth:1,labels:'all',pulses:false,gravity:.007,charge:5000,distance:90,damping:.82};
 function renderGraph() {
   if(typeof RepoGraph==='undefined'||!RepoGraph.CanvasView){$('graph-coverage').textContent='Refresh the page or restart the local server to load the graph.';return;}
   if(!graphView)graphView=new RepoGraph.CanvasView($('repo-graph'),selectGraphNode,node=>{
