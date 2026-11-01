@@ -49,6 +49,10 @@ The central question is:
 
 The black investigation workbench uses square panels, compact typography, thin straight connectors, and softly glowing graph nodes. Its high-DPI Canvas graph has spring physics, Coulomb repulsion, center gravity, velocity damping, draggable nodes, cursor-centered wheel zoom, touch pinch gestures, and hover spotlighting. Select a file or dependency to inspect its cited observations, external evidence, and reviewer assessment. The live timeline follows real server events; active status text uses an original CSS luminance animation with reduced-motion support.
 
+A square graph sits beside Live Investigation and Evidence Inspector. Five clickable stages and three agent cards expose actual work, retained output counts, and evidence inspection. The interactive Workflow explains each handoff and how retrieved passages ground the agents, with excerpts from the current run. This MVP ranks bounded passages in Python; it does not use a vector database. A prominent outcome panel links to the final report, distinguishes incomplete results, and highlights New investigation after a run ends.
+
+Use **Manage history & cache** beside recent investigations or in Local workspace to clear saved investigations, research cache, or both. Cleanup requires typing `CLEAR` and is blocked during active work. History cleanup removes saved reports, evidence, and events with no application undo; credentials, model settings, repository files, and separately downloaded exports are preserved.
+
 The graph shows folder membership and citation associations, not a complete call graph. It prioritizes inspected files and displays at most 160 file paths, with omissions disclosed. The floating Groups, Filters, Colors, Display, and Forces controls offer CVSS filters, orphan visibility, repository/service-layer/heatmap coloring, labels, visual scale, candidate-path pulses, and force sliders. Architecture colors identify repository groups; heatmap colors use published advisory scores. Missing scores stay Unscored, and Clean means CVSS 0 on an advisory, not a security clearance. See [workspace interactions and verification](docs/investigation-workbench.md).
 
 **The graph screenshot above uses saved public SwarmSim evidence from the documented live integration run. It does not establish a vulnerability or production exposure. The earlier report screenshot below uses the fictional offline example and shows the previous interface.**
@@ -403,6 +407,8 @@ The interface uses these endpoints. This is a loopback development API, not a pu
 | `POST` | `/api/jobs/{id}/cancel` | Request cooperative cancellation. |
 | `GET` | `/api/jobs/{id}/report` | Download the Markdown report. |
 | `GET` | `/api/jobs/{id}/artifacts` | Download the JSON artifacts. |
+| `GET` | `/api/storage` | Local history/event counts, active jobs, and research cache size. |
+| `POST` | `/api/storage/clear` | Clear `history`, `cache`, or `all` with `confirmation: "CLEAR"`; blocked during active work. |
 
 Requests must satisfy local Host/Origin checks. Mutating requests also require the `X-Review-Token` returned by `/api/config`. The browser manages this automatically. This token is separate from provider API credentials.
 
@@ -476,7 +482,7 @@ node --check web/graph.js
 node --test tests/test_graph.cjs
 ```
 
-The current suite contains **103 Python test cases**, plus **19 Node.js graph tests** covering:
+The current suite contains **111 Python test cases**, plus **19 Node.js graph tests** covering:
 
 - Citation rejection, evidence-reference integrity, date handling, and unknowns.
 - Retention of existing defenses and rejected matches in controlled fixtures.
@@ -484,12 +490,13 @@ The current suite contains **103 Python test cases**, plus **19 Node.js graph te
 - Gemini/Groq role routing, credential isolation, structured handoffs, and Tavily-returned source provenance.
 - Incomplete/refused output rejection, shared call budgets, search failures, and provider key redaction.
 - Local API protections, report delivery, and event replay.
+- Scoped history/cache cleanup, active-job guards, explicit confirmation, and unrelated-file preservation.
 - Cancellation, completion races, restart recovery, and partial results.
 - Offline execution and a complete mocked model/search workflow, including the bounded follow-up.
 
 API tests need permission to open and connect to loopback sockets. Temporary test data stays under ignored `test-output/`.
 
-**Verification scope:** all 103 Python tests and 19 graph tests pass after the investigation workbench update, including the complete mocked Gemini/Groq/Tavily workflow and bounded follow-up. Earlier checks exercised the browser workflow, downloads, responsive layout, and public GitHub ingestion. Live API smoke checks are separate from a complete repository review; run `--check-apis` to verify your effective configuration. The four-repository live integration results and rerun command are recorded in [live verification](docs/live-verification-2026-10-31.md). The current workbench screenshots use saved public repository artifacts; the earlier interface screenshots and included example report use synthetic offline fixtures. These checks are not a live-provider benchmark, a security audit, or evidence that generated recommendations are always correct.
+**Verification scope:** all 111 Python tests and 19 graph tests pass after the investigation workbench update, including the complete mocked Gemini/Groq/Tavily workflow and bounded follow-up. Browser checks covered an offline run through all three agents, workflow inspection, completion/report actions, fresh-investigation reset, the cleanup dialog, and a square mobile graph without horizontal overflow. Destructive cleanup tests used disposable fixtures; existing user history was preserved. Earlier checks exercised downloads and public GitHub ingestion. Live API smoke checks are separate from a complete repository review; run `--check-apis` to verify your effective configuration. The four-repository live integration results and rerun command are recorded in [live verification](docs/live-verification-2026-10-31.md). The current workbench screenshots use saved public repository artifacts; the earlier interface screenshots and included example report use synthetic offline fixtures. These checks are not a live-provider benchmark, a security audit, or evidence that generated recommendations are always correct.
 
 ### Project structure
 
