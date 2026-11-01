@@ -396,10 +396,12 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(config['search_provider'], 'tavily')
 
     def test_repository_graph_asset_is_served_under_same_origin_policy(self):
-        status, body, headers = self.request('GET', '/graph.js')
-        self.assertEqual(status, 200)
-        self.assertIn(b'RepoGraph', body)
-        self.assertIn("script-src 'self'", headers['Content-Security-Policy'])
+        for path, identifier in [('/graph.js', b'RepoGraph'), ('/markdown.js', b'ReportMarkdown')]:
+            with self.subTest(path=path):
+                status, body, headers = self.request('GET', path)
+                self.assertEqual(status, 200)
+                self.assertIn(identifier, body)
+                self.assertIn("script-src 'self'", headers['Content-Security-Policy'])
 
     def test_csrf_and_host_protection(self):
         self.assertEqual(self.request('POST','/api/jobs', {'mode':'demo'})[0],403)
