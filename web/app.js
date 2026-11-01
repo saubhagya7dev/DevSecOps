@@ -128,7 +128,7 @@ function renderEvidence(a) {
 
 function renderReport() {
   if (!current?.report) return empty('Your report is being assembled', 'The cited Markdown report becomes available after the evidence checks finish.', 'file');
-  return `<div class="report-summary"><h3>${current.status === 'partial' ? 'Report ready with limitations' : 'Your review is ready'}</h3><p>Review the evidence, verify open questions, and share the Markdown with your team.</p></div><div class="report-toolbar"><a class="button primary" href="/api/jobs/${currentId}/report">${icon('download')}Download Markdown</a><button class="button" id="copy-report">${icon('copy')}Copy report</button><a class="button" href="/api/jobs/${currentId}/artifacts">Evidence JSON</a></div><pre class="report-raw">${esc(current.report)}</pre>`;
+  return `<div class="report-summary"><h3>${current.status === 'partial' ? 'Report ready with limitations' : 'Your review is ready'}</h3><p>Review the evidence, verify open questions, and share the Markdown with your team.</p></div><div class="report-toolbar"><a class="button primary" href="/api/jobs/${currentId}/report">${icon('download')}Download Markdown</a><button class="button" id="copy-report">${icon('copy')}Copy report</button><a class="button" href="/api/jobs/${currentId}/artifacts">Evidence JSON</a></div><label class="report-scroll-toggle"><input id="report-sync" type="checkbox" checked>Sync scrolling</label><div class="report-split"><section class="report-pane"><div class="report-pane-bar">MARKDOWN SOURCE <span>Read-only · ${current.report.split('\n').length} lines</span></div><pre id="report-source" class="report-source" tabindex="0" aria-label="Report Markdown source">${current.report.split('\n').map(line=>`<span class="source-line">${esc(line)||' '}</span>`).join('')}</pre></section><section class="report-pane"><div class="report-pane-bar">PREVIEW <span>Rendered Markdown</span></div><article id="report-preview" class="markdown-preview" tabindex="0" aria-label="Rendered report preview">${ReportMarkdown.render(current.report)}</article></section></div>`;
 }
 
 function renderResults() {
@@ -136,6 +136,19 @@ function renderResults() {
   const html = {overview: () => renderOverview(a), incidents: () => renderIncidents(a), recommendations: () => renderRecommendations(a), evidence: () => renderEvidence(a), report: renderReport}[activeTab]();
   const el = $('result-content');
   const scroll = el.scrollTop; el.innerHTML = html; el.scrollTop = scroll;
+  const source = $('report-source'), preview = $('report-preview');
+  if (source && preview) {
+    let scheduled = false;
+    for (const [from, to] of [[source, preview], [preview, source]]) {
+      from.addEventListener('scroll', () => {
+        if (scheduled || !$('report-sync').checked) return;
+        scheduled = true;
+        const range = from.scrollHeight - from.clientHeight;
+        to.scrollTop = range > 0 ? from.scrollTop / range * (to.scrollHeight - to.clientHeight) : 0;
+        requestAnimationFrame(() => { scheduled = false; });
+      }, {passive:true});
+    }
+  }
   $('copy-report')?.addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(current.report); showToast('Markdown copied to clipboard'); }
     catch { showToast('Clipboard unavailable. Use Download Markdown.'); }
