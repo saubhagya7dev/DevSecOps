@@ -11,6 +11,7 @@ One public GitHub URL. Three AI roles. A traceable path from source code to prev
 [![API](https://img.shields.io/badge/API-Gemini%20%7C%20Groq%20%7C%20Tavily-4285F4)](#configuration)
 [![A2A](https://img.shields.io/badge/A2A-not%20implemented-777777)](#architecture)
 [![RAG](https://img.shields.io/badge/RAG-passage%20grounding-8A63D2)](#how-it-works)
+[![Tests passed](https://img.shields.io/badge/tests%20passed-134%20local-2EA44F)](#development-and-verification)
 [![SQLite](https://img.shields.io/badge/storage-SQLite-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 [![Version](https://img.shields.io/badge/version-0.1.0-blue)](pyproject.toml)
 
