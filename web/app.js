@@ -166,7 +166,7 @@ function renderJob() {
   $('preparation-status').textContent = current ? `Preparation: ${current.stages.prepare} · Validation: ${current.stages.validation}` : '';
   $('incident-count').textContent = a.research ? a.research.incidents.length : '';
   $('finding-count').textContent = a.review ? a.review.findings.length : '';
-  renderResults(); renderGraph(); renderInspector(); updateElapsed();
+  renderResults(); renderGraph(); renderInspector(); renderExperience(); updateElapsed();
 }
 
 function updateElapsed() {
@@ -240,7 +240,7 @@ async function start(mode) {
   try {
     const result = await api('/api/jobs', {method:'POST', body:JSON.stringify({repository_url:$('repo-url').value.trim(), mode, days:Number($('window').value)})});
     activeTab = 'overview'; switchTab('overview'); $('report-section').hidden = true; await selectJob(result.id); await loadHistory();
-    scrollToElement(document.querySelector('#workspace'));
+    scrollToElement($('progress-title'));
   } catch (error) { $('form-error').textContent = error.message; $('form-error').hidden = false; }
   finally { isSubmitting = false; $('start-button').disabled = false; $('demo-button').disabled = false; }
 }
@@ -250,7 +250,7 @@ function openDialog(html, kicker = 'WORKSPACE') { $('dialog-content').innerHTML 
 function showSettings() {
   const roles = Object.entries(config?.roles || {}).map(([role, setting]) => `<li><strong>${esc(role)}</strong> · ${esc(setting.provider)} · <code>${esc(setting.model)}</code></li>`).join('');
   const missing = (config?.missing_credentials || []).map(esc).join(', ');
-  openDialog(`<h2>Connect live intelligence.</h2><p>Gemini analyzes the repository. Python discovers advisories and original reports; Qwen on Groq interprets selected passages within quota limits. GPT OSS on Groq reviews the evidence. Credentials stay on the server.</p><ul>${roles}</ul><p><strong>Researcher token allowance:</strong> ${esc(config?.researcher_token_budget ?? 1000)}, including instructions, schema, and reserved output. Change <code>RESEARCHER_TOKEN_BUDGET</code> only after verifying your provider quota. Optional VCDB discovery is ${config?.vcdb_enabled ? "enabled" : "disabled"}.</p><ol><li>For a new installation, copy <code>.env.example</code> to <code>.env</code>. Merge these settings into an existing file.</li><li>Set <code>GEMINI_API_KEY</code>, <code>GROQ_API_KEY</code>, and <code>TAVILY_API_KEY</code> locally. Never paste keys into this page or a chat.</li><li>Optionally set <code>GITHUB_TOKEN</code> for higher public API limits.</li><li>Restart <code>python run.py</code>, then refresh this page.</li></ol><p><strong>Current status:</strong> ${config?.live_ready ? 'All credentials configured; provider access has not been verified.' : `Missing: ${missing || 'configuration unavailable'}.`}</p><p>Public source excerpts are sent to Gemini and Groq. Generated search queries are sent to Tavily. Suspected credential lines are redacted, but redaction is not a guarantee. The offline example needs no keys.</p>`, 'CONFIGURATION');
+  openDialog(`<h2>Connect live intelligence.</h2><p>Gemini analyzes the repository. Python discovers advisories and original reports; Qwen on Groq interprets selected passages within quota limits. GPT OSS on Groq reviews the evidence. Credentials stay on the server.</p><ul>${roles}</ul><p><strong>Researcher token allowance:</strong> ${esc(config?.researcher_token_budget ?? 1000)}, including instructions, schema, and reserved output. Change <code>RESEARCHER_TOKEN_BUDGET</code> only after verifying your provider quota. Optional VCDB discovery is ${config?.vcdb_enabled ? "enabled" : "disabled"}.</p><ol><li>For a new installation, copy <code>.env.example</code> to <code>.env</code>. Merge these settings into an existing file.</li><li>Set <code>GEMINI_API_KEY</code>, <code>GROQ_API_KEY</code>, and <code>TAVILY_API_KEY</code> locally. Never paste keys into this page or a chat.</li><li>Optionally set <code>GITHUB_TOKEN</code> for higher public API limits.</li><li>Restart <code>python run.py</code>, then refresh this page.</li></ol><button class="button" data-manage-storage>Manage history &amp; research cache</button><p><strong>Current status:</strong> ${config?.live_ready ? 'All credentials configured; provider access has not been verified.' : `Missing: ${missing || 'configuration unavailable'}.`}</p><p>Public source excerpts are sent to Gemini and Groq. Generated search queries are sent to Tavily. Suspected credential lines are redacted, but redaction is not a guarantee. The offline example needs no keys.</p>`, 'CONFIGURATION');
 }
 
 $('review-form').addEventListener('submit', e => { e.preventDefault(); start('live'); });
@@ -264,12 +264,12 @@ document.querySelector('.tabs').addEventListener('keydown', e => {
   tabs[i].focus(); switchTab(tabs[i].dataset.tab);
 });
 document.addEventListener('click', e => {
-  const job = e.target.closest('[data-job]'); if (job) { $('info-dialog').close(); selectJob(job.dataset.job); scrollToElement(document.querySelector('.analysis-grid')); }
+  const job = e.target.closest('[data-job]'); if (job) { $('info-dialog').close(); selectJob(job.dataset.job); scrollToElement($('progress-title')); }
   const ev = e.target.closest('[data-evidence]'); if (ev) { e.preventDefault(); selectGraphNode('obs:'+ev.dataset.evidence); switchTab('evidence'); scrollToElement(document.getElementById(`evidence-${ev.dataset.evidence}`), 'nearest'); }
   const inc = e.target.closest('[data-incident]'); if (inc) { e.preventDefault(); switchTab('incidents'); }
 });
 $('settings-nav').addEventListener('click',showSettings); $('connection-status').addEventListener('click',showSettings);
-$('how-nav').addEventListener('click', () => openDialog('<h2>Three roles. One evidence chain.</h2><p><strong>01 · Repository Analyst</strong><br>Reads a bounded selection of code at a fixed commit. Maps technology, security-relevant behavior, and unknowns.</p><p><strong>02 · Incident Researcher</strong><br>Searches selected primary sources, retrieves pages, and extracts documented attack mechanisms and prerequisites.</p><p><strong>03 · Security Reviewer</strong><br>Checks the connection, looks for existing defenses, and recommends concrete actions and verification steps.</p><p><strong>Then: evidence validation</strong><br>Checks quote integrity and evidence references before assembling your report. These checks do not independently prove that every AI interpretation is correct.</p><p>A shared framework does not establish a shared weakness. Incomplete evidence is labeled. No code runs and no files in the analyzed repository are changed.</p>', 'THE WORKFLOW'));
+$('how-nav').addEventListener('click',()=>showWorkflow());
 $('history-nav').addEventListener('click', async () => { await loadHistory(); openDialog(`<h2>Past reviews</h2>${recent.length ? historyRows(recent) : '<p>No reviews yet. Start with a public repository or try the offline example.</p>'}`, 'LOCAL HISTORY'); });
 $('workspace-nav').addEventListener('click', () => { $('report-section').hidden = true; scrollToElement($('workspace')); });
 $('close-dialog').addEventListener('click', () => $('info-dialog').close());
@@ -341,13 +341,17 @@ function renderInspector(){
 function renderLiveStatus(){
   const running=current&&!terminal.has(current.status), latest=eventItems.at(-1);
   const stage=Object.keys(stageNames).find(s=>current?.stages[s]==='running');
-  const operation=latest?.title==='Agent working'?({analyst:'Analyzing repository…',researcher:'Interpreting source evidence…',reviewer:'Assessing evidence and prerequisites…'}[stage]||latest.title):latest?.title;
+  const operation=latest?.title==='Agent working'?({analyst:'Analyzing repository…',researcher:'Interpreting source evidence…',reviewer:'Assessing evidence and prerequisites…'}[stage]||latest.title):latest?.title==='Stage started'?latest.detail:latest?.title==='Read repository file'?'Reading '+latest.detail:latest?.title;
   const status=running?(operation||'Waiting for the worker…'):current?$('job-state').textContent:'No investigation running.';
   const live=Boolean(running&&streamConnected);
   $('operation-status').textContent=status;
   $('operation-status').classList.toggle('luminous',live);
   $('following-stage').textContent='/ '+(stage?stageNames[stage]:current?'Investigation saved':'Awaiting repository');
   $('stream-state').textContent=running?(streamConnected?'Connected':'Reconnecting…'):current?'Saved activity':'Not connected';
+  $('live-focus-agent').textContent=stage?stageNames[stage]:current?'Saved investigation':'Waiting for a repository';
+  $('live-focus-operation').textContent=status;
+  $('live-focus-operation').classList.toggle('luminous',live);
+  renderExperience();
   const age=latest?Math.max(0,Math.floor((Date.now()-Date.parse(latest.at))/1000)):null;
   $('event-age').textContent=running&&age!==null?`Last update ${age}s ago`:'';
   $('reviewer-state').textContent=(current?.stages.reviewer||'waiting').toUpperCase();
@@ -356,7 +360,7 @@ function renderLiveStatus(){
   const label=$('inspector-live-status');if(label){label.textContent=stage==='reviewer'&&running?status:'';label.classList.toggle('luminous',live&&stage==='reviewer');}
   const lastTitle=$('activity-log').lastElementChild?.querySelector('.event-title');lastTitle?.classList.toggle('luminous',live);
 }
-$('new-investigation').addEventListener('click',()=>{document.body.classList.toggle('show-input');$('repo-url').focus();});
+$('new-investigation').addEventListener('click',beginNewInvestigation);
 $('graph-search').addEventListener('input',()=>{$('control-query').value=$('graph-search').value;renderGraph();});
 $('inspected-only').addEventListener('change',renderGraph);
 ['structure','evidence'].forEach(mode=>$('graph-'+mode).addEventListener('click',()=>{graphMode=mode;['structure','evidence'].forEach(m=>{$('graph-'+m).classList.toggle('active',mode===m);$('graph-'+m).setAttribute('aria-pressed',String(mode===m));});renderGraph();}));
@@ -391,6 +395,119 @@ $('view-report').addEventListener('click',()=>{switchTab('report');scrollToEleme
 $('close-results').addEventListener('click',()=>{$('report-section').hidden=true;});
 setInterval(()=>{if(current&&!terminal.has(current.status))updateElapsed();},1000);
 
+
+const flowSteps=[
+  {id:'prepare',name:'Read snapshot',title:'Read a bounded, pinned repository snapshot',input:'One public GitHub URL',work:'Python reads selected source files at a fixed commit. No repository code is executed.',output:'Inspected files, source paths, and coverage limits.',tab:'evidence'},
+  {id:'analyst',name:'Repository Analyst',title:'Turn inspected code into cited observations',input:'Numbered source files and repository structure',work:'The analyst maps components, technologies, behavior, and observed defenses. Exact quotations and line ranges are checked locally.',output:'Verified observations, a technology profile, and explicit unknowns.',tab:'overview'},
+  {id:'researcher',name:'Incident Researcher',title:'Retrieve original reports and ground the research',input:'Observed technology and attack-mechanism questions',work:'Python queries official advisories and Tavily, fetches primary reports, and ranks passages. The researcher interprets selected text within the configured model allowance.',output:'External records and source passages; advisories and background remain distinct.',tab:'incidents'},
+  {id:'reviewer',name:'Security Reviewer',title:'Check whether attack prerequisites connect to this code',input:'Repository observations and retrieved external evidence',work:'The reviewer compares prerequisites, existing defenses, counterevidence, and missing deployment context. Shared technology alone is insufficient.',output:'Preventive recommendations, verification questions, or rejected matches.',tab:'recommendations'},
+  {id:'validation',name:'Validate & report',title:'Make the evidence trail reviewable',input:'Agent outputs, quote checks, and evidence references',work:'Python validates references and assembles the cited Markdown report. A report can finish with limitations or contain zero accepted recommendations.',output:'A downloadable report and evidence JSON. Production exposure remains unverified.',tab:'report'}
+];
+let workflowSelection='prepare',workflowContentSignature='';
+$('workflow-map').innerHTML=flowSteps.map((step,i)=>`<button id="workflow-step-${step.id}" role="tab" data-explain-step="${step.id}" aria-selected="${i===0}" aria-controls="workflow-stage-content" tabindex="${i===0?0:-1}"><span>0${i+1}</span><strong>${esc(step.name)}</strong><small class="map-state">Ready to explore</small></button>`).join('');
+$('process-track').innerHTML=flowSteps.map((step,i)=>`<button data-explain-step="${step.id}" class="track-step" data-track="${step.id}"><span>0${i+1}</span>${esc(step.name)}<small>Waiting</small></button>`).join('');
+const countText=(number,one,many=one+'s')=>`${number} ${number===1?one:many}`;
+function roleMetric(role){
+  const a=current?.artifacts||{};
+  if(role==='prepare')return a.repository?`${a.repository.files.length} files read at ${a.repository.commit.slice(0,8)}`:'Snapshot not available yet';
+  if(role==='analyst')return a.profile?`${countText(a.profile.observations.length,'verified observation')} · ${countText(a.profile.technologies.length,'technology','technologies')}`:a.repository?`${countText(a.repository.files.length,'file')} ready for analysis`:'No repository profile yet';
+  if(role==='researcher')return a.research?`${countText(a.research.sources.length,'source page')} · ${countText(a.research.incidents.length,'external record')} · ${countText((a.research.advisories||[]).length,'advisory','advisories')}`:'No research output yet';
+  if(role==='reviewer')return a.review?`${countText(a.review.findings.length,'recommendation')} · ${countText(a.review.rejected_matches.length,'rejected match','rejected matches')}`:'Assessment follows retrieved evidence';
+  return current?.report?'Cited Markdown and evidence JSON available':'Report follows final reference checks';
+}
+function renderExperience(){
+  const state=current?.status,done=Boolean(current&&terminal.has(state)),a=current?.artifacts||{};
+  const running=flowSteps.find(step=>current?.stages[step.id]==='running');
+  const finished=flowSteps.filter(step=>current?.stages[step.id]==='completed').length;
+  $('progress-title').textContent=done?(state==='completed'?'Investigation complete':state==='partial'?'Finished with limitations':state==='cancelled'?'Investigation cancelled':'Investigation stopped'):current?(running?running.name+' is working':'Investigation queued'):'Ready to investigate';
+  const skipped=flowSteps.filter(step=>current?.stages[step.id]==='skipped').length;
+  $('progress-description').textContent=current?(done?`${finished} completed · ${skipped} skipped · see the run outcome`:`${finished} of 5 stages completed${running?' · '+roleMetric(running.id):''}`):'Follow the code, retrieve evidence, then review the connection.';
+  const labels={queued:'Waiting',running:'Working',completed:'Completed',partial:'Partial output',failed:'Failed',skipped:'Skipped',cancelled:'Cancelled'};
+  flowSteps.forEach(step=>{
+    const status=current?.stages[step.id]||'queued';
+    const map=$('workflow-step-'+step.id);map.className='workflow-map-step '+status;map.querySelector('.map-state').textContent=current?labels[status]||status:'Click to explore';
+    if(status==='running')map.setAttribute('aria-current','step');else map.removeAttribute('aria-current');
+    const track=document.querySelector(`[data-track="${step.id}"]`);track.className='track-step '+status;track.querySelector('small').textContent=labels[status]||status;
+  });
+  document.querySelectorAll('.agent-card').forEach(card=>{
+    const role=card.dataset.stage,status=current?.stages[role]||'queued';
+    const output=role==='analyst'?a.profile:role==='researcher'?a.research:a.review;
+    card.querySelector('.agent-status').textContent=labels[status]||status;
+    card.querySelector('.agent-metric').textContent=roleMetric(role);
+    const events=eventItems.filter(e=>e.stage===role),latest=events.at(-1);
+    card.querySelector('.agent-operation').textContent=status==='running'?(latest?.detail||latest?.title||'Hosted request in progress. Awaiting an update.'):output?(status==='skipped'?'The saved output explains why review was skipped.':'Saved output is ready to inspect.'):status==='failed'?'This stage stopped before producing accepted output.':'Waiting for the previous stage’s evidence.';
+    const button=card.querySelector('.agent-output');button.disabled=!output;button.textContent=status==='skipped'?'See why skipped →':'Inspect output →';
+  });
+  $('new-investigation').classList.toggle('new-ready',done);
+  $('live-new').hidden=!done;$('live-new').classList.toggle('new-ready',done);$('live-report').hidden=!current?.report;$('live-report').textContent=state==='partial'?'Open report & limitations →':'Open final report →';$('view-report').classList.toggle('report-ready',Boolean(current?.report));
+  $('run-outcome').hidden=!done;
+  if(done){
+    const report=Boolean(current.report);
+    $('run-outcome').className='run-outcome '+state;
+    $('run-outcome').querySelector('.outcome-mark').textContent=state==='completed'?'✓':state==='partial'?'!':state==='cancelled'?'—':'×';
+    $('outcome-title').textContent=state==='completed'?'Your investigation is complete.':state==='partial'?(report?'Your report is ready—with limitations.':'Investigation ended with limitations.'):state==='cancelled'?'This investigation was cancelled.':'This investigation stopped.';
+    $('outcome-label').textContent=report?'FINAL REPORT AVAILABLE':'RUN ENDED';
+    $('run-outcome').querySelector('[data-new-investigation]').classList.add('new-ready');
+    $('outcome-detail').textContent=state==='completed'?'Open the cited report to review findings, uncertainty, and preventive actions.':state==='partial'?'Some evidence or checks were incomplete. Review the report’s limitations before using its recommendations.':current.error||'Saved intermediate evidence remains accessible in history. You can start a new investigation.';
+    $('outcome-counts').textContent=[countText(a.profile?.observations.length||0,'verified observation'),countText(a.research?.incidents.length||0,'external record'),countText(a.review?.findings.length||0,'recommendation')].join(' / ');
+    $('outcome-report').hidden=!report;$('outcome-download').hidden=!report;
+    $('outcome-report').textContent=state==='partial'?'Open report & limitations →':'Open final report →';
+    $('outcome-download').href=`/api/jobs/${currentId}/report`;
+  }
+  if(!$('workflow-explainer').hidden)renderWorkflowStep();
+}
+function renderWorkflowStep(){
+  const step=flowSteps.find(s=>s.id===workflowSelection)||flowSteps[0];
+  document.querySelectorAll('#workflow-map [role="tab"]').forEach(button=>{const selected=button.dataset.explainStep===step.id;button.setAttribute('aria-selected',String(selected));button.tabIndex=selected?0:-1;});
+  $('workflow-stage-content').setAttribute('aria-labelledby','workflow-step-'+step.id);
+  const a=current?.artifacts||{},available=step.id==='prepare'?a.repository:step.id==='analyst'?a.profile:step.id==='researcher'?a.research:step.id==='reviewer'?a.review:current?.report;
+  const proof=step.id==='analyst'?a.profile?.observations?.[0]?.quote:step.id==='researcher'?a.research?.incidents?.[0]?.source_quote:step.id==='reviewer'?a.review?.findings?.[0]?.action||a.review?.rejected_matches?.[0]?.reason:step.id==='prepare'?a.repository?.files?.[0]?.path:current?.report?'A cited Markdown report and evidence JSON are ready to inspect.':'';
+  const signature=JSON.stringify([currentId,step.id,Boolean(available),roleMetric(step.id),current?.stages[step.id],proof]);
+  if(signature===workflowContentSignature)return;workflowContentSignature=signature;
+  $('workflow-stage-content').innerHTML=`<div class="step-explanation"><span class="eyebrow">${esc(current?.stages[step.id]||'EXPLORE THIS STEP')}</span><h3>${esc(step.title)}</h3><p>${esc(step.work)}</p></div><div class="step-evidence"><div><span>INPUT</span><p>${esc(step.input)}</p></div><div><span>OUTPUT</span><p>${esc(step.output)}</p></div><strong>${esc(roleMetric(step.id))}</strong>${proof?`<div class="workflow-proof"><span>FROM THIS RUN</span><p>${esc(proof.slice(0,450))}</p></div>`:''}<button class="button" data-output="${step.tab}" ${available?'':'disabled'}>${available?'Inspect this run’s output →':'Output appears after this stage'}</button></div>`;
+}
+function showWorkflow(step){
+  workflowSelection=step||flowSteps.find(s=>current?.stages[s.id]==='running')?.id||'prepare';
+  $('workflow-explainer').hidden=false;renderExperience();scrollToElement($('workflow-explainer'));
+}
+function beginNewInvestigation(){
+  if(current&&!terminal.has(current.status)){document.body.classList.add('show-input');$('repo-url').focus();return;}
+  eventStream?.close();clearTimeout(reloadTimer);current=null;currentId=null;eventItems=[];selectedNode=null;graphSignature='';streamConnected=false;graphView?.reset();
+  const url=new URL(location.href);url.searchParams.delete('review');history.replaceState(null,'',url);
+  $('repo-url').value='';$('graph-search').value='';$('control-query').value='';graphSettings.minScore=0;$('min-cvss').value=0;$('min-cvss-value').textContent='0';
+  $('inspected-only').checked=false;$('show-orphans').checked=true;graphSettings.orphans=true;graphSettings.severities=['Critical','High','Medium','Low','Clean','Unscored'];document.querySelectorAll('[data-severity]').forEach(el=>{el.checked=true;});
+  $('report-section').hidden=true;document.body.classList.add('show-input');renderJob();renderEvents();scrollToElement($('review-form'));$('repo-url').focus();
+}
+async function manageStorage(){
+  try{
+    const stats=await api('/api/storage');
+    openDialog(`<h2>Manage local history &amp; research cache</h2><p>${stats.history.investigations} saved investigations · ${stats.history.events} activity events · ${stats.cache.files} cached files (${(stats.cache.bytes/1048576).toFixed(1)} MB).</p><p>Saved investigations contain reports, repository evidence, and event logs. The research cache contains retrieved pages, search metadata, and extracted results. There is no vector-memory database in this version. Clearing the cache means later runs may retrieve and process this evidence again.</p><p>Clearing these records cannot be undone here. API credentials and model settings are not deleted.</p>${stats.history.active?'<p class="error-banner">Finish or cancel active investigations before clearing data.</p>':''}<form id="clear-storage-form"><label for="clear-scope">Choose what to clear</label><select id="clear-scope"><option value="history">Saved investigations, reports &amp; activity</option><option value="cache">Research cache only</option><option value="all">Saved investigations + research cache</option></select><label for="clear-confirmation">Type CLEAR to confirm</label><input id="clear-confirmation" autocomplete="off" maxlength="5" placeholder="CLEAR"><button id="clear-storage-submit" class="button danger" type="submit" disabled>Clear selected local data</button><p id="storage-error" class="form-error" role="alert"></p></form>`, 'LOCAL DATA');
+    $('clear-confirmation').addEventListener('input',()=>{$('clear-storage-submit').disabled=Boolean(stats.history.active)||$('clear-confirmation').value!=='CLEAR';});
+    $('clear-storage-form').addEventListener('submit',async e=>{
+      e.preventDefault();const scope=$('clear-scope').value;$('clear-storage-submit').disabled=true;
+      try{
+        const result=await api('/api/storage/clear',{method:'POST',body:JSON.stringify({scope,confirmation:$('clear-confirmation').value})});
+        $('info-dialog').close();
+        if(scope==='history'||scope==='all')beginNewInvestigation();await loadHistory();showToast(`Cleared ${result.cleared.history?.investigations||0} investigations and ${result.cleared.cache?.files||0} cached files.`);
+      }catch(error){$('storage-error').textContent=error.message;$('clear-storage-submit').disabled=false;}
+    });
+  }catch(error){showToast(error.message+' Restart the local server if these controls were just installed.');}
+}
+$('explore-workflow').addEventListener('click',()=>showWorkflow());
+$('close-workflow').addEventListener('click',()=>{$('workflow-explainer').hidden=true;scrollToElement($('progress-title'));});
+$('outcome-report').addEventListener('click',()=>{switchTab('report');scrollToElement($('report-section'));});
+$('manage-storage').addEventListener('click',manageStorage);
+$('live-report').addEventListener('click',()=>{switchTab('report');scrollToElement($('report-section'));});
+document.addEventListener('click',e=>{
+  const explain=e.target.closest('[data-explain-step]');if(explain){workflowSelection=explain.dataset.explainStep;if(explain.closest('#workflow-map'))renderWorkflowStep();else showWorkflow(workflowSelection);}
+  const agent=e.target.closest('[data-agent-output]');if(agent){switchTab({analyst:'overview',researcher:'incidents',reviewer:'recommendations'}[agent.dataset.agentOutput]);scrollToElement($('report-section'));}
+  if(e.target.closest('[data-new-investigation]'))beginNewInvestigation();
+  if(e.target.closest('[data-manage-storage]'))manageStorage();
+});
+$('workflow-map').addEventListener('keydown',e=>{
+  if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const tabs=[...$('workflow-map').querySelectorAll('[role="tab"]')],i=tabs.indexOf(document.activeElement);
+  const next=tabs[e.key==='Home'?0:e.key==='End'?tabs.length-1:(i+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length];workflowSelection=next.dataset.explainStep;next.focus();renderWorkflowStep();
+});
 async function initialize() {
   renderJob();
   try {
