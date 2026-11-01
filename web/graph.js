@@ -118,7 +118,7 @@
   class CanvasView {
     constructor(canvas,onSelect,onHover){
       this.canvas=canvas;this.ctx=canvas.getContext('2d');this.onSelect=onSelect;this.onHover=onHover;
-      this.model={nodes:[],edges:[],groups:[]};this.settings={charge:5000,gravity:.007,distance:90,damping:.82,nodeScale:1,linkWidth:1,labels:'large',colorMode:'architecture',pulses:false};
+      this.model={nodes:[],edges:[],groups:[]};this.settings={charge:5000,gravity:.007,distance:90,damping:.82,nodeScale:1,linkWidth:1,labels:'all',colorMode:'architecture',pulses:false};
       this.camera={x:0,y:0,z:1};this.pointers=new Map();this.hover=null;this.selected=null;this.alpha=0;this.frame=0;this.visible=true;this.autoFit=true;
       this.motion=matchMedia('(prefers-reduced-motion: reduce)');
       this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(canvas);window.addEventListener('resize',()=>this.resize());
