@@ -1613,3 +1613,37 @@ li {
 .has-review .project-intro {padding:16px 0}
 .has-review .project-intro h2 {font-size:19px}
 .has-review .project-intro p {font-size:11px}
+
+/* Markdown source and preview share the same read-only report. */
+.report-scroll-toggle {display:flex;align-items:center;gap:7px;font-size:11px;color:#aaa;margin:14px 0}
+.report-split {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border:1px solid var(--line)}
+.report-pane {min-width:0;overflow:hidden}
+.report-pane+.report-pane {border-left:1px solid var(--line)}
+.report-pane-bar {padding:12px 15px;border-bottom:1px solid var(--line);font:10px var(--mono);color:#cebddf;display:flex;justify-content:space-between;gap:12px;background:#111}
+.report-pane-bar span {color:#777;font-size:9px}
+.report-source,.markdown-preview {height: min(74vh,850px);min-height:360px;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable;margin:0}
+.report-source {border:0;border-radius:0;padding:18px 12px;background:#0b0b0b;counter-reset:source;white-space:pre-wrap;word-break:normal;overflow-wrap:anywhere;font:11px/1.85 var(--mono);color:#bbb}
+.source-line {display:block;position:relative;padding-left:42px;min-height:1.85em}
+.source-line::before {counter-increment:source;content:counter(source);position:absolute;left:0;width:30px;text-align:right;color:#5f5868;font-size:10px;user-select:none}
+.markdown-preview {padding:20px 26px;background:#101010;color:#bfbfbf;font-size:12px;line-height:1.85;overflow-wrap:anywhere}
+.markdown-preview h1,.markdown-preview h2,.markdown-preview h3,.markdown-preview h4,.markdown-preview h5,.markdown-preview h6 {color:#e2e2e2;line-height:1.45;margin:26px 0 14px;font-weight:600}
+.markdown-preview h1 {font-size:23px;border-bottom:1px solid #333;padding-bottom:12px;margin-top:0}
+.markdown-preview h2 {font-size:18px;border-bottom:1px solid #292929;padding-bottom:9px}
+.markdown-preview h3 {font-size:15px}
+.markdown-preview p {margin:12px 0;white-space:pre-line}
+.markdown-preview ul,.markdown-preview ol {padding-left:23px;margin:12px 0}
+.markdown-preview li {margin:5px 0;white-space:pre-line}
+.markdown-preview strong {color:#ddd}
+.markdown-preview a {color:#c0a6e4;text-decoration:underline;text-underline-offset:3px}
+.markdown-preview code {font:11px/1.8 var(--mono);background:#222;padding:2px 4px;color:#d5c4eb}
+.markdown-preview pre {margin:14px 0;padding:13px;background:#191919;overflow:auto;white-space:pre}
+.markdown-preview pre code {background:none;padding:0}
+.markdown-preview blockquote {border-left:3px solid #77618e;background:#19161c;padding:4px 14px;margin:16px 0;color:#beb0cb}
+.markdown-preview hr {border:0;border-top:1px solid #333;margin:24px 0}
+@media(max-width:900px) {
+  .report-split {grid-template-columns:1fr}
+  .report-pane+.report-pane {border-left:0;border-top:1px solid var(--line)}
+  .report-source,.markdown-preview {height:55vh;min-height:280px}
+  .markdown-preview {padding:18px}
+  .report-pane-bar span {font-size:8px}
+}
