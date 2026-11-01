@@ -483,12 +483,15 @@ python -m compileall -q devsecops run.py
 # Optional JavaScript syntax check; requires Node.js
 node --check web/app.js
 node --check web/graph.js
-node --test tests/test_graph.cjs
+node --test tests/test_graph.cjs tests/test_markdown.cjs
 ```
 
-The current suite contains **111 Python test cases**, plus **19 Node.js graph tests** covering:
+The tests badge records a locally verified run, not a CI status or live-provider availability check.
+
+The current suite contains **111 Python test cases**, plus **23 Node.js tests** (19 graph and 4 Markdown preview tests) covering:
 
 - Citation rejection, evidence-reference integrity, date handling, and unknowns.
+- Markdown preview formatting and rejection of executable HTML/link targets.
 - Retention of existing defenses and rejected matches in controlled fixtures.
 - URL validation, DNS/private-network boundaries, redirects, and redaction.
 - Gemini/Groq role routing, credential isolation, structured handoffs, and Tavily-returned source provenance.
@@ -500,7 +503,7 @@ The current suite contains **111 Python test cases**, plus **19 Node.js graph te
 
 API tests need permission to open and connect to loopback sockets. Temporary test data stays under ignored `test-output/`.
 
-**Verification scope:** all 111 Python tests and 19 graph tests pass after the investigation workbench update, including the complete mocked Gemini/Groq/Tavily workflow and bounded follow-up. Browser checks covered an offline run through all three agents, workflow inspection, completion/report actions, fresh-investigation reset, the cleanup dialog, and a square mobile graph without horizontal overflow. Destructive cleanup tests used disposable fixtures; existing user history was preserved. Earlier checks exercised downloads and public GitHub ingestion. Live API smoke checks are separate from a complete repository review; run `--check-apis` to verify your effective configuration. The four-repository live integration results and rerun command are recorded in [live verification](docs/live-verification-2026-10-31.md). The current workbench screenshots use saved public repository artifacts; the earlier interface screenshots and included example report use synthetic offline fixtures. These checks are not a live-provider benchmark, a security audit, or evidence that generated recommendations are always correct.
+**Verification scope:** all 111 Python tests and 23 JavaScript tests pass after the investigation workbench update, including the complete mocked Gemini/Groq/Tavily workflow and bounded follow-up. Browser checks covered an offline run through all three agents, workflow inspection, completion/report actions, fresh-investigation reset, the cleanup dialog, and a square mobile graph without horizontal overflow. Destructive cleanup tests used disposable fixtures; existing user history was preserved. Earlier checks exercised downloads and public GitHub ingestion. Live API smoke checks are separate from a complete repository review; run `--check-apis` to verify your effective configuration. The four-repository live integration results and rerun command are recorded in [live verification](docs/live-verification-2026-10-31.md). The current workbench screenshots use saved public repository artifacts; the earlier interface screenshots and included example report use synthetic offline fixtures. These checks are not a live-provider benchmark, a security audit, or evidence that generated recommendations are always correct.
 
 ### Project structure
 
