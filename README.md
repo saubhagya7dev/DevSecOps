@@ -9,7 +9,7 @@ One public GitHub URL. Three AI roles. A traceable path from source code to prev
 ![AI roles](https://img.shields.io/badge/AI_roles-3-8A63D2)
 ![Runtime dependencies](https://img.shields.io/badge/runtime_dependencies-0-2EA44F)
 [![API](https://img.shields.io/badge/API-Gemini%20%7C%20Groq%20%7C%20Tavily-4285F4)](#configure-live-analysis)
-[![A2A](https://img.shields.io/badge/A2A-not%20implemented-777777)](#architecture)
+[![Multi-agent orchestration](https://img.shields.io/badge/Multi--agent%20orchestration-3%20roles-8A63D2)](#architecture)
 [![RAG](https://img.shields.io/badge/RAG-passage%20grounding-8A63D2)](#how-it-works)
 [![Tests passed](https://img.shields.io/badge/tests%20passed-134%20local-2EA44F)](#development-and-verification)
 [![SQLite](https://img.shields.io/badge/storage-SQLite-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
