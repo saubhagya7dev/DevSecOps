@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import re
 import time
 from pathlib import Path
 
@@ -44,3 +45,22 @@ class ResearchCache:
         except OSError:
             # Cache availability never establishes source or model availability.
             pass
+
+    def entries(self):
+        if self.root.is_symlink():
+            raise ValueError('Research cache folder must not be a symbolic link.')
+        root = self.root.resolve()
+        if not root.exists():
+            return []
+        return [p for p in root.iterdir() if re.fullmatch(r'[a-f0-9]{64}(?:\.\d+\.tmp|\.json)', p.name)
+                and not p.is_symlink() and p.is_file() and p.resolve().parent == root]
+
+    def storage_stats(self):
+        entries = self.entries()
+        return {'files': len(entries), 'bytes': sum(p.stat().st_size for p in entries)}
+
+    def clear(self):
+        entries = self.entries()
+        for path in entries:
+            path.unlink(missing_ok=True)
+        return {'files': len(entries)}
