@@ -534,3 +534,105 @@ async function initialize() {
   setInterval(() => { updateElapsed(); if (current && !terminal.has(current.status)) reloadCurrent(); }, 4000);
 }
 initialize();
+
+// Landing-only role emphasis; investigation stages remain controlled by the runner.
+(() => {
+  const intro = document.querySelector('.landing-intro');
+  const roles = [...document.querySelectorAll('[data-intro-role]')];
+  if (!intro || !roles.length) return;
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  let horizonFrame = 0, position = 50, target = 50;
+  function animateHorizon() {
+    position = reducedMotion.matches ? target : position + (target - position) * .16;
+    if (Math.abs(target - position) < .05) position = target;
+    intro.style.setProperty('--horizon-x', `${position}%`);
+    horizonFrame = position === target ? 0 : requestAnimationFrame(animateHorizon);
+  }
+  function activate(role) {
+    roles.forEach(item => item.setAttribute('aria-pressed', String(item === role)));
+    const region = intro.querySelector('.intro-horizon').getBoundingClientRect();
+    const bounds = role.getBoundingClientRect();
+    target = Math.max(0, Math.min(100, (bounds.left + bounds.width / 2 - region.left) / region.width * 100));
+    if (!horizonFrame) horizonFrame = requestAnimationFrame(animateHorizon);
+  }
+  roles.forEach(role => {
+    role.addEventListener('pointerenter', event => { if (event.pointerType !== 'touch') activate(role); });
+    role.addEventListener('focus', () => activate(role));
+    role.addEventListener('click', () => activate(role));
+  });
+  window.addEventListener('resize', () => activate(roles.find(role => role.getAttribute('aria-pressed') === 'true')));
+})();
+
+// Paint only existing rectangular borders near the pointer. The overlay never
+// receives input or changes panel layout, graph drawing, or graph gestures.
+(() => {
+  const finePointer = matchMedia('(any-hover: hover) and (any-pointer: fine)');
+  const canvas = document.createElement('canvas');
+  canvas.className = 'edge-light';
+  canvas.setAttribute('aria-hidden', 'true');
+  document.body.append(canvas);
+  const context = canvas.getContext('2d');
+  if (!context) { canvas.remove(); return; }
+  const surfaces = '.site-header,.brand,.nav-link,.workspace-settings,.input-card,.input-card input,.input-card select,.button,.run-outcome,.run-progress,.workflow,.agent-card,.graph-panel,.activity-panel,.inspector-panel,.review-tray,.report-section,.recent-item,.graph-search input,.graph-tabs button,.panel-bar,.controls-body,dialog[open]';
+  let pointer = null, frame = 0;
+  function resize() {
+    const ratio = Math.min(devicePixelRatio || 1, 2);
+    canvas.width = Math.round(innerWidth * ratio);
+    canvas.height = Math.round(innerHeight * ratio);
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    schedule();
+  }
+  function paint() {
+    frame = 0;
+    context.clearRect(0, 0, innerWidth, innerHeight);
+    if (!pointer || !finePointer.matches || document.hidden) return;
+    const {x, y} = pointer, radius = 135;
+    const light = context.createRadialGradient(x, y, 0, x, y, radius);
+    light.addColorStop(0, '#fff3d9');
+    light.addColorStop(.15, '#efb9a9e6');
+    light.addColorStop(.35, '#8edbe1ba');
+    light.addColorStop(.60, '#a383e66b');
+    light.addColorStop(1, '#a383e600');
+    context.strokeStyle = light;
+    context.lineWidth = 1.2;
+    context.shadowColor = '#b8a5e9';
+    context.shadowBlur = 7;
+    // Query at draw time so dynamic report panels and dialogs need no observers.
+    document.querySelectorAll(surfaces).forEach(element => {
+      const bounds = element.getBoundingClientRect();
+      if (!bounds.width || !bounds.height || bounds.bottom < 0 || bounds.top > innerHeight) return;
+      const dx = Math.max(bounds.left - x, 0, x - bounds.right);
+      const dy = Math.max(bounds.top - y, 0, y - bounds.bottom);
+      if (Math.hypot(dx, dy) > radius) return;
+      const edge = Math.min(Math.abs(x - bounds.left), Math.abs(x - bounds.right), Math.abs(y - bounds.top), Math.abs(y - bounds.bottom));
+      if (!dx && !dy && edge > radius) return;
+      const style = getComputedStyle(element);
+      if (style.visibility === 'hidden' || style.display === 'none') return;
+      // Use actual border widths: never invent boxes around borderless controls.
+      const edges = [
+        ['borderTopWidth', bounds.left, bounds.top, bounds.right, bounds.top],
+        ['borderRightWidth', bounds.right, bounds.top, bounds.right, bounds.bottom],
+        ['borderBottomWidth', bounds.right, bounds.bottom, bounds.left, bounds.bottom],
+        ['borderLeftWidth', bounds.left, bounds.bottom, bounds.left, bounds.top],
+      ];
+      context.beginPath();
+      edges.forEach(([width, x1, y1, x2, y2]) => {
+        if (parseFloat(style[width]) > 0) { context.moveTo(x1, y1); context.lineTo(x2, y2); }
+      });
+      context.stroke();
+    });
+  }
+  function schedule() { if (!frame) frame = requestAnimationFrame(paint); }
+  document.addEventListener('pointermove', event => {
+    pointer = event.pointerType === 'touch' ? null : {x:event.clientX, y:event.clientY};
+    schedule();
+  }, {passive:true});
+  function clear() { pointer = null; schedule(); }
+  document.documentElement.addEventListener('pointerleave', clear);
+  window.addEventListener('blur', clear);
+  document.addEventListener('visibilitychange', clear);
+  document.addEventListener('scroll', schedule, {passive:true, capture:true});
+  finePointer.addEventListener('change', clear);
+  window.addEventListener('resize', resize);
+  resize();
+})();
