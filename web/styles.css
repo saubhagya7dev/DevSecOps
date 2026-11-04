@@ -1678,11 +1678,11 @@ li {
 .intro-roles {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:50px;margin-top:42px}
 .intro-role {display:block;text-align:left;padding:12px 0;border:0;background:none;min-width:0;color:#a8a8a8}
 .intro-role:hover:not(:disabled) {background:none}
-.intro-role>span {display:block;font:10px/1.6 var(--mono);letter-spacing:.1em}
+.intro-role>span:first-child {display:block;font:10px/1.6 var(--mono);letter-spacing:.1em}
 .intro-role>strong {display:block;font-size:clamp(17px,1.7vw,24px);font-weight:500;letter-spacing:-.025em;margin:12px 0 9px}
-.landing-intro .intro-role p,.has-review .landing-intro .intro-role p {font-size:13px;line-height:1.7;color:#929292;max-width:300px}
+.landing-intro .intro-role .role-description,.has-review .landing-intro .intro-role .role-description {display:block;font-size:13px;line-height:1.7;color:#929292;max-width:300px}
 .intro-role[aria-pressed="true"] {color:#f0f0f0}
-.intro-role[aria-pressed="true"]>span {color:#e2c69d}
+.intro-role[aria-pressed="true"]>span:first-child {color:#e2c69d}
 .intro-role[aria-pressed="true"] p {color:#bbb}
 .intro-horizon {position:relative;height:85px;overflow:hidden;margin:0 -32px;pointer-events:none}
 .horizon-rim {position:absolute;width:140%;height:230px;left:-20%;top:58px;border-radius:50%;border-top:1px solid #9781b0;box-shadow:0 -5px 22px #8970ae20;background:#090909}
@@ -1705,7 +1705,7 @@ main>.investigation-heading {border-top:1px solid var(--line)}
   .landing-intro h2,.has-review .landing-intro h2 {font-size:clamp(30px,6vw,44px)}
   .intro-roles {gap:18px;margin-top:28px}
   .intro-role>strong {font-size:17px}
-  .landing-intro .intro-role p,.has-review .landing-intro .intro-role p {font-size:11px}
+  .landing-intro .intro-role .role-description,.has-review .landing-intro .intro-role .role-description {font-size:11px}
   .intro-horizon {margin:0 -4px}
   .intro-assurance {font-size:9px}
   .input-card {padding:14px 12px 0}
@@ -1714,9 +1714,9 @@ main>.investigation-heading {border-top:1px solid var(--line)}
 }
 @media(max-width:480px) {
   .intro-roles {gap:12px}
-  .intro-role>span {font-size:8px;letter-spacing:.02em}
+  .intro-role>span:first-child {font-size:8px;letter-spacing:.02em}
   .intro-role>strong {font-size:15px}
-  .intro-role p {overflow-wrap:anywhere}
+  .intro-role .role-description {overflow-wrap:anywhere}
   .input-card .primary {font-size:11px;padding:11px}
 }
 @media(prefers-reduced-motion:reduce) {.horizon-dawn {transition:none}}
