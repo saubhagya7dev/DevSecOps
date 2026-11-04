@@ -1647,3 +1647,76 @@ li {
   .markdown-preview {padding:18px}
   .report-pane-bar span {font-size:8px}
 }
+
+/* Landing introduction: open roles, sharp surfaces, and a restrained dawn. */
+.landing-intro {
+  --horizon-x:50%;
+  display:block;
+  position:relative;
+  isolation:isolate;
+  padding:54px 32px 0;
+  margin:0;
+  border:0;
+}
+.landing-intro .intro-copy {max-width:850px}
+.landing-intro .eyebrow {color:#c3aedc;font-size:10px}
+.landing-intro h2,.has-review .landing-intro h2 {
+  font-size:clamp(32px,4vw,60px);
+  font-weight:600;
+  line-height:1.12;
+  letter-spacing:-.04em;
+  max-width:950px;
+  margin:22px 0 17px;
+}
+.landing-intro .intro-copy p,.has-review .landing-intro .intro-copy p {
+  font-size:clamp(14px,1.35vw,18px);
+  line-height:1.65;
+  color:#aaa;
+  max-width:790px;
+}
+.intro-assurance {display:block;margin-top:18px;font:11px/1.7 var(--mono);color:#929292}
+.intro-roles {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:50px;margin-top:42px}
+.intro-role {display:block;text-align:left;padding:12px 0;border:0;background:none;min-width:0;color:#a8a8a8}
+.intro-role:hover:not(:disabled) {background:none}
+.intro-role>span {display:block;font:10px/1.6 var(--mono);letter-spacing:.1em}
+.intro-role>strong {display:block;font-size:clamp(17px,1.7vw,24px);font-weight:500;letter-spacing:-.025em;margin:12px 0 9px}
+.landing-intro .intro-role p,.has-review .landing-intro .intro-role p {font-size:13px;line-height:1.7;color:#929292;max-width:300px}
+.intro-role[aria-pressed="true"] {color:#f0f0f0}
+.intro-role[aria-pressed="true"]>span {color:#e2c69d}
+.intro-role[aria-pressed="true"] p {color:#bbb}
+.intro-horizon {position:relative;height:85px;overflow:hidden;margin:0 -32px;pointer-events:none}
+.horizon-rim {position:absolute;width:140%;height:230px;left:-20%;top:58px;border-radius:50%;border-top:1px solid #9781b0;box-shadow:0 -5px 22px #8970ae20;background:#090909}
+.horizon-dawn {position:absolute;inset:0;background:radial-gradient(ellipse 115px 24px at var(--horizon-x) 59px,#ffe8cba8 0%,#d7b0ca55 23%,#9575c82b 50%,transparent 100%);transition:background-position .3s;filter:blur(3px)}
+.landing-intro .intro-actions {align-items:flex-start;margin:0 0 18px}
+.landing-intro .intro-actions button {color:#c7b8e9;padding:5px 0;font-size:11px}
+.has-review .landing-intro {padding:36px 32px 0}
+.input-card {background:#0e0e0e;padding:16px 20px 0;margin-bottom:20px}
+#input-title {font-size:16px;font-weight:500;margin:0 0 12px}
+.input-card form {padding:0 0 14px;gap:14px}
+.input-card form>input {border:1px solid var(--line);font-size:12px;padding:12px}
+.input-card select {padding:11px 12px}
+.input-card .primary {padding:12px 18px;font-size:12px}
+.input-footer {padding:10px 0;font-size:9px;gap:14px}
+main>.investigation-heading {border-top:1px solid var(--line)}
+.edge-light {position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:1000}
+@media(min-width:1600px) {.landing-intro {padding-top:64px}.intro-roles {margin-top:50px}}
+@media(max-width:760px) {
+  .landing-intro,.has-review .landing-intro {padding:30px 4px 0}
+  .landing-intro h2,.has-review .landing-intro h2 {font-size:clamp(30px,6vw,44px)}
+  .intro-roles {gap:18px;margin-top:28px}
+  .intro-role>strong {font-size:17px}
+  .landing-intro .intro-role p,.has-review .landing-intro .intro-role p {font-size:11px}
+  .intro-horizon {margin:0 -4px}
+  .intro-assurance {font-size:9px}
+  .input-card {padding:14px 12px 0}
+  .input-card form>input {width:calc(100% - 34px)}
+  .input-footer #demo-button {margin-left:0}
+}
+@media(max-width:480px) {
+  .intro-roles {gap:12px}
+  .intro-role>span {font-size:8px;letter-spacing:.02em}
+  .intro-role>strong {font-size:15px}
+  .intro-role p {overflow-wrap:anywhere}
+  .input-card .primary {font-size:11px;padding:11px}
+}
+@media(prefers-reduced-motion:reduce) {.horizon-dawn {transition:none}}
