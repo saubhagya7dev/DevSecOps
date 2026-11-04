@@ -31,3 +31,9 @@ The first view introduces the product before the existing repository investigati
 ## Local review
 
 Open the local app and hard-refresh to load the current CSS and JavaScript. Hover each introductory role, tab through the controls, and move the pointer along navigation, form, and workbench borders. Check a narrow viewport and reduced-motion mode. Explore the offline example to inspect the original graph and report actions without live model calls.
+
+## Border alignment correction — 2026-11-04
+
+User screenshots exposed a horizontal offset between real borders and the glow. The canvas bitmap used `innerWidth` (including scrollbar width), but its CSS percentage width excluded the scrollbar. Stretching the bitmap introduced increasing horizontal drift. The overlay now measures its own CSS rectangle, maps viewport coordinates using the actual rounded backing dimensions, and refreshes that mapping on draw so browser zoom and display scaling changes are respected. Strokes are centered inside each actual border instead of outside the element box.
+
+Three regression tests in `tests/test_edge_light.cjs` cover scrollbar width, fractional bounds/DPR changes, and border centers/missing edges. All 26 JavaScript tests pass, and `node --check web/app.js` passes. A refreshed local-browser check confirmed the glow aligns with the repository panel's upper-right border. No graph code or backend changes.

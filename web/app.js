@@ -575,16 +575,24 @@ initialize();
   if (!context) { canvas.remove(); return; }
   const surfaces = '.site-header,.brand,.nav-link,.workspace-settings,.input-card,.input-card input,.input-card select,.button,.run-outcome,.run-progress,.workflow,.agent-card,.graph-panel,.activity-panel,.inspector-panel,.review-tray,.report-section,.recent-item,.graph-search input,.graph-tabs button,.panel-bar,.controls-body,dialog[open]';
   let pointer = null, frame = 0;
-  function resize() {
-    const ratio = Math.min(devicePixelRatio || 1, 2);
-    canvas.width = Math.round(innerWidth * ratio);
-    canvas.height = Math.round(innerHeight * ratio);
-    context.setTransform(ratio, 0, 0, ratio, 0, 0);
-    schedule();
-  }
+  function resize() { schedule(); }
   function paint() {
     frame = 0;
-    context.clearRect(0, 0, innerWidth, innerHeight);
+    // CSS percentages exclude the scrollbar, while innerWidth includes it.
+    // Map viewport coordinates to the actual canvas box, including fractional
+    // dimensions and DPR changes after browser zoom or moving between screens.
+    const box = canvas.getBoundingClientRect();
+    if (!box.width || !box.height) return;
+    const ratio = Math.min(devicePixelRatio || 1, 2);
+    const width = Math.round(box.width * ratio), height = Math.round(box.height * ratio);
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+    context.setTransform(1, 0, 0, 1, 0, 0);
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    const scaleX = canvas.width / box.width, scaleY = canvas.height / box.height;
+    context.setTransform(scaleX, 0, 0, scaleY, -box.left * scaleX, -box.top * scaleY);
     if (!pointer || !finePointer.matches || document.hidden) return;
     const {x, y} = pointer, radius = 135;
     const light = context.createRadialGradient(x, y, 0, x, y, radius);
@@ -609,15 +617,21 @@ initialize();
       const style = getComputedStyle(element);
       if (style.visibility === 'hidden' || style.display === 'none') return;
       // Use actual border widths: never invent boxes around borderless controls.
+      const top = parseFloat(style.borderTopWidth) || 0;
+      const right = parseFloat(style.borderRightWidth) || 0;
+      const bottom = parseFloat(style.borderBottomWidth) || 0;
+      const left = parseFloat(style.borderLeftWidth) || 0;
+      const x1 = bounds.left + left / 2, x2 = bounds.right - right / 2;
+      const y1 = bounds.top + top / 2, y2 = bounds.bottom - bottom / 2;
       const edges = [
-        ['borderTopWidth', bounds.left, bounds.top, bounds.right, bounds.top],
-        ['borderRightWidth', bounds.right, bounds.top, bounds.right, bounds.bottom],
-        ['borderBottomWidth', bounds.right, bounds.bottom, bounds.left, bounds.bottom],
-        ['borderLeftWidth', bounds.left, bounds.bottom, bounds.left, bounds.top],
+        [top, x1, y1, x2, y1],
+        [right, x2, y1, x2, y2],
+        [bottom, x2, y2, x1, y2],
+        [left, x1, y2, x1, y1],
       ];
       context.beginPath();
-      edges.forEach(([width, x1, y1, x2, y2]) => {
-        if (parseFloat(style[width]) > 0) { context.moveTo(x1, y1); context.lineTo(x2, y2); }
+      edges.forEach(([width, startX, startY, endX, endY]) => {
+        if (width > 0) { context.moveTo(startX, startY); context.lineTo(endX, endY); }
       });
       context.stroke();
     });
