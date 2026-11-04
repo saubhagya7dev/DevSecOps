@@ -37,3 +37,7 @@ Open the local app and hard-refresh to load the current CSS and JavaScript. Hove
 User screenshots exposed a horizontal offset between real borders and the glow. The canvas bitmap used `innerWidth` (including scrollbar width), but its CSS percentage width excluded the scrollbar. Stretching the bitmap introduced increasing horizontal drift. The overlay now measures its own CSS rectangle, maps viewport coordinates using the actual rounded backing dimensions, and refreshes that mapping on draw so browser zoom and display scaling changes are respected. Strokes are centered inside each actual border instead of outside the element box.
 
 Three regression tests in `tests/test_edge_light.cjs` cover scrollbar width, fractional bounds/DPR changes, and border centers/missing edges. All 26 JavaScript tests pass, and `node --check web/app.js` passes. A refreshed local-browser check confirmed the glow aligns with the repository panel's upper-right border. No graph code or backend changes.
+
+## Sunrise rebuild — supersedes the initial CSS horizon
+
+See [the reference study](sunrise-reference-study.md) for the live visual observations and the implementation comparison. Commit `cf92c6a` replaces the small CSS strip with full-introduction stars, a dark planet, layered atmosphere, and a sun that follows the curve. The local browser was checked in all three role states and at a narrow viewport. All 30 JavaScript tests pass, including the original graph/report tests, border-alignment tests, and new sunrise tests.

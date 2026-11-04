@@ -22,3 +22,23 @@ The old scene was only 85px tall, contained no stars, and used a CSS border elli
 ## Rebuild plan
 
 Use an original local canvas renderer across the full introduction: deterministic fine star texture, a filled dark hemisphere, layered cool atmosphere, warm multiscale sunrise scattering, and a crisp color-varying rim. Derive the sun's height from the same curve used to draw the planet. Animate only while transitioning between role positions, pause when hidden/offscreen, and snap to the selected state under reduced motion. Preserve sharp UI borders, the separate edge-light effect, and the existing Obsidian repository graph.
+
+## Implemented comparison
+
+Commit `cf92c6a` replaces the earlier CSS strip with an original Canvas 2D renderer across the whole introduction. No external imagery, paid source code, packages, or CDN requests were added.
+
+The renderer caches a deterministic star texture at the measured canvas size, draws broad cool atmosphere and several warm scattering scales, fills the planetary silhouette in front of the light, and finishes with a thin gradient rim and flattened white-peach crest. The crest height is calculated from the same quadratic as the planet, so moving left/right lowers it naturally. A faint amber reflection is clipped to the planet below the sunrise.
+
+The transition uses elapsed frame time rather than a refresh-rate-dependent step. It stops once settled; hidden/offscreen scenes do not keep drawing. Reduced motion snaps to the chosen role. Role text changes color, with no role borders or boxes. The existing whole-UI border illumination and graph implementation are unchanged.
+
+Validation:
+
+- Inspected the actual local center, Analyst, and Reviewer states in the browser and compared them with the reference's center/left/right states. Confirmed warm scattering moves with the crest and the opposite atmosphere remains cool.
+- Removed a visible purple stroke band during visual refinement so the outer atmosphere is diffuse.
+- Checked a 390 × 844 viewport: the introduction and roles fit without horizontal document overflow (375px content width plus the viewport scrollbar).
+- `node --check web/app.js`: passed.
+- `node --test tests/test_sunrise.cjs tests/test_edge_light.cjs tests/test_graph.cjs tests/test_markdown.cjs`: 30 passed.
+- New tests verify curve/planet agreement, deterministic bounded star generation, transition settling, reduced motion, and offscreen redraw suspension.
+- `git diff --check`: passed.
+
+This is a reference-informed recreation of the visual behavior, not a claim of a pixel-identical copy. The earlier generated concept images and 85px CSS-strip descriptions in the initial landing update are superseded by this implementation.
