@@ -535,25 +535,125 @@ async function initialize() {
 }
 initialize();
 
+// Original procedural sunrise, informed by the visible reference study.
+const Sunrise = (() => {
+  function horizonAt(x, width, height) {
+    return height * (.755 + .115 * Math.pow((x - width / 2) / (width / 2), 2));
+  }
+  function starsFor(width, height) {
+    let seed = 24681357;
+    const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+    return Array.from({length:Math.min(2400, Math.round(width * height / 680))}, () => ({
+      x:random() * width, y:random() * height, radius:.25 + random() * .55,
+      alpha:.06 + Math.pow(random(), 3) * .30, warm:random() > .73,
+    }));
+  }
+  function create(canvas) {
+    const ctx = canvas.getContext('2d', {alpha:false});
+    if (!ctx) return {focus() {}};
+    const motion = matchMedia('(prefers-reduced-motion: reduce)');
+    let width=0, height=0, ratio=1, texture=null;
+    let position=.5, target=.5, frame=0, lastTime=0, visible=true;
+    function planetPath() {
+      ctx.beginPath();
+      ctx.moveTo(0, horizonAt(0,width,height));
+      // Quadratic control point reproduces horizonAt exactly.
+      ctx.quadraticCurveTo(width/2, height*.64, width, horizonAt(width,width,height));
+      ctx.lineTo(width,height);ctx.lineTo(0,height);ctx.closePath();
+    }
+    function rimPath() {
+      ctx.beginPath();ctx.moveTo(0,horizonAt(0,width,height));
+      ctx.quadraticCurveTo(width/2,height*.64,width,horizonAt(width,width,height));
+    }
+    function glow(x,y,rx,ry,stops) {
+      ctx.save();ctx.translate(x,y);ctx.scale(rx,ry);
+      const gradient=ctx.createRadialGradient(0,0,0,0,0,1);
+      stops.forEach(([offset,color])=>gradient.addColorStop(offset,color));
+      ctx.fillStyle=gradient;ctx.fillRect(-1,-1,2,2);ctx.restore();
+    }
+    function prepare() {
+      const bounds=canvas.getBoundingClientRect();
+      const nextRatio=Math.min(devicePixelRatio||1,2);
+      if (!bounds.width || !bounds.height) return false;
+      if (width===bounds.width && height===bounds.height && ratio===nextRatio) return true;
+      width=bounds.width;height=bounds.height;ratio=nextRatio;
+      canvas.width=Math.round(width*ratio);canvas.height=Math.round(height*ratio);
+      texture=document.createElement('canvas');texture.width=canvas.width;texture.height=canvas.height;
+      const sky=texture.getContext('2d');
+      sky.setTransform(canvas.width/width,0,0,canvas.height/height,0,0);
+      sky.fillStyle='#08090c';sky.fillRect(0,0,width,height);
+      const blue=sky.createLinearGradient(0,height*.2,0,height);
+      blue.addColorStop(0,'#08090c00');blue.addColorStop(.65,'#0b183c66');blue.addColorStop(1,'#17234e99');
+      sky.fillStyle=blue;sky.fillRect(0,0,width,height);
+      starsFor(width,height).forEach(star=>{
+        sky.fillStyle=star.warm?`rgba(203,163,132,${star.alpha})`:`rgba(148,182,220,${star.alpha})`;
+        sky.beginPath();sky.arc(star.x,star.y,star.radius,0,Math.PI*2);sky.fill();
+      });
+      return true;
+    }
+    function draw() {
+      if (!prepare()) return;
+      ctx.setTransform(canvas.width/width,0,0,canvas.height/height,0,0);
+      ctx.drawImage(texture,0,0,width,height);
+      const sunX=width*position, sunY=horizonAt(sunX,width,height);
+      const scale=height;
+      // Wide cool air hugs the whole planet, even opposite the warm sunrise.
+      ctx.save();ctx.globalCompositeOperation='screen';
+      rimPath();ctx.strokeStyle='#6353a066';ctx.lineWidth=20;ctx.filter='blur(14px)';ctx.stroke();
+      ctx.filter='none';
+      glow(sunX,sunY,width*.58,scale*.62,[[0,'#6b284a62'],[.35,'#45204a44'],[.75,'#231c4022'],[1,'#151b3400']]);
+      glow(sunX,sunY,width*.33,scale*.30,[[0,'#ffb49a9c'],[.12,'#e282737b'],[.37,'#a4537052'],[.7,'#60346b27'],[1,'#472a6800']]);
+      glow(sunX,sunY,width*.20,scale*.13,[[0,'#ffe7d7dd'],[.13,'#ffbfa3b0'],[.36,'#ef948079'],[.7,'#b45d6b29'],[1,'#8c426700']]);
+      ctx.restore();
+      // Occlude the lower half of the sun: it is dawn behind a real silhouette.
+      planetPath();ctx.fillStyle='#08090b';ctx.fill();
+      ctx.save();planetPath();ctx.clip();ctx.globalCompositeOperation='screen';
+      glow(sunX,sunY,width*.27,scale*.27,[[0,'#b8733738'],[.3,'#81502420'],[1,'#29190a00']]);
+      ctx.restore();
+      // The illuminated rim changes from cool violet to coral to white near dawn.
+      const rim=ctx.createLinearGradient(sunX-width*.65,0,sunX+width*.65,0);
+      [[0,'#36366544'],[.22,'#60508a99'],[.36,'#c58294cc'],[.44,'#ffbfa5'],[.5,'#fff5e9'],[.56,'#ffbfa5'],[.64,'#c58294cc'],[.78,'#60508a99'],[1,'#36366544']].forEach(([p,c])=>rim.addColorStop(p,c));
+      ctx.save();rimPath();ctx.strokeStyle=rim;ctx.lineWidth=1.25;ctx.shadowBlur=6;ctx.shadowColor='#ffbdac';ctx.stroke();ctx.restore();
+      // Small flattened solar crest, attached to the curve rather than floating.
+      ctx.save();ctx.globalCompositeOperation='screen';
+      glow(sunX,sunY-1,width*.055,scale*.023,[[0,'#fff9eedd'],[.14,'#ffe9d8aa'],[.4,'#ffc2a75a'],[1,'#f09a8300']]);
+      ctx.restore();
+      // A gentle lower fade blends the planet into the existing black workbench.
+      const fade=ctx.createLinearGradient(0,height*.88,0,height);
+      fade.addColorStop(0,'#09090900');fade.addColorStop(1,'#090909');ctx.fillStyle=fade;ctx.fillRect(0,height*.88,width,height*.12);
+    }
+    function tick(time) {
+      frame=0;
+      if (!visible || document.hidden) {lastTime=0;return;}
+      const delta=lastTime?Math.min(time-lastTime,64):16;lastTime=time;
+      position=motion.matches?target:position+(target-position)*(1-Math.exp(-delta/165));
+      if (Math.abs(target-position)<.0001)position=target;
+      draw();
+      if (position!==target)frame=requestAnimationFrame(tick);else lastTime=0;
+    }
+    function schedule() {if (!frame && visible && !document.hidden)frame=requestAnimationFrame(tick);}
+    function focus(value) {target=Math.max(.08,Math.min(.92,value));schedule();}
+    const observer=new ResizeObserver(schedule);observer.observe(canvas);
+    const visibility=new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;if(visible)schedule();});visibility.observe(canvas);
+    document.addEventListener('visibilitychange',schedule);
+    motion.addEventListener('change',()=>{if(motion.matches)position=target;schedule();});
+    schedule();
+    return {focus};
+  }
+  return {create,horizonAt,starsFor};
+})();
+
 // Landing-only role emphasis; investigation stages remain controlled by the runner.
 (() => {
   const intro = document.querySelector('.landing-intro');
   const roles = [...document.querySelectorAll('[data-intro-role]')];
   if (!intro || !roles.length) return;
-  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
-  let horizonFrame = 0, position = 50, target = 50;
-  function animateHorizon() {
-    position = reducedMotion.matches ? target : position + (target - position) * .16;
-    if (Math.abs(target - position) < .05) position = target;
-    intro.style.setProperty('--horizon-x', `${position}%`);
-    horizonFrame = position === target ? 0 : requestAnimationFrame(animateHorizon);
-  }
+  const scene = Sunrise.create(intro.querySelector('.sunrise-scene'));
   function activate(role) {
     roles.forEach(item => item.setAttribute('aria-pressed', String(item === role)));
-    const region = intro.querySelector('.intro-horizon').getBoundingClientRect();
+    const region = intro.querySelector('.sunrise-scene').getBoundingClientRect();
     const bounds = role.getBoundingClientRect();
-    target = Math.max(0, Math.min(100, (bounds.left + bounds.width / 2 - region.left) / region.width * 100));
-    if (!horizonFrame) horizonFrame = requestAnimationFrame(animateHorizon);
+    scene.focus((bounds.left + bounds.width / 2 - region.left) / region.width);
   }
   roles.forEach(role => {
     role.addEventListener('pointerenter', event => { if (event.pointerType !== 'touch') activate(role); });
