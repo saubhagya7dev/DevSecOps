@@ -86,7 +86,14 @@ def review_security(profile, research, client, followup=None):
     profile_view, research_view = reviewer_views(profile, research)
     return client.call('reviewer', '''Act as Security Reviewer. Compare documented attack prerequisites with
 repository observations. Look for defenses and counterevidence before making recommendations. Return at most
-4 findings. Keep descriptions to one short sentence and lists to three short items. Every finding needs at least one valid incident_id and one repository evidence_id. A shared stack
+4 findings. Keep descriptions to one short sentence and lists to three short items.
+Always review repository security, even when research has no incidents or failed. For code-grounded
+architecture, trust-boundary, input-validation, authentication, secrets, or dependency improvements use
+classification Repository improvement, valid repository evidence_ids, empty incident_ids, and empty
+prerequisite_assessments. Give a concrete action and safe verification step tied to the observed code.
+These are hardening or verification suggestions, never claims of a missing defense or confirmed vulnerability.
+When evidence is insufficient, state specific questions instead of inventing facts. Acknowledge existing defenses.
+For the other three classifications every finding needs at least one valid incident_id and repository evidence_id. A shared stack
 alone is Background lesson, never Supported concern. An inferred observation alone cannot support a concern.
 When deployment/configuration/version evidence is missing, use Needs verification and list exactly what is missing.
 Provide one prerequisite_assessments entry per material prerequisite, with supported, contradicted, or unknown
