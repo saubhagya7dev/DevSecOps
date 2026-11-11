@@ -156,14 +156,16 @@
     }
     reset(){this.model={nodes:[],edges:[],groups:[]};this.fitted=false;this.pointers.clear();this.pinch=null;this.hover=null;this.selected=null;this.alpha=0;this.autoFit=true;this.draw();}
     update(settings,selected){this.settings={...this.settings,...settings};this.selected=selected;this.draw();}
-    fit(smooth=false){
+    fit(smooth=false,redraw=true,blend=.12){
       const nodes=this.model.nodes;if(!nodes.length||!this.width)return;
       const minX=Math.min(...nodes.map(n=>n.x-n.radius*2)),maxX=Math.max(...nodes.map(n=>n.x+n.radius*2));
       const minY=Math.min(...nodes.map(n=>n.y-n.radius*2)),maxY=Math.max(...nodes.map(n=>n.y+n.radius*2));
       const z=Math.max(.1,Math.min(2.5,Math.min((this.width-70)/Math.max(120,maxX-minX),(this.height-65)/Math.max(100,maxY-minY))));
       const next={z,x:this.width/2-(minX+maxX)/2*z,y:this.height/2-(minY+maxY)/2*z};
-      if(smooth){for(const k of ['x','y','z'])this.camera[k]+=(next[k]-this.camera[k])*.25;}else{this.camera=next;this.autoFit=true;}
-      this.fitted=true;this.draw();
+      const moving=Math.abs(next.x-this.camera.x)>.2||Math.abs(next.y-this.camera.y)>.2||Math.abs(next.z-this.camera.z)>.0005;
+      if(smooth&&moving&&!this.motion?.matches){for(const k of ['x','y','z'])this.camera[k]+=(next[k]-this.camera[k])*blend;}else{this.camera=next;if(!smooth)this.autoFit=true;}
+      this.fitted=true;if(redraw)this.draw();
+      return smooth&&moving&&!this.motion?.matches;
     }
     zoom(factor,p={x:this.width/2,y:this.height/2}){
       this.autoFit=false;const anchor=this.world(p),z=Math.max(.08,Math.min(6,this.camera.z*factor));
@@ -204,16 +206,18 @@
     reheat(){this.alpha=this.model.nodes.length ? .8 : 0;this.ticks=0;this.wake();}
     wake(){if(!this.frame&&this.visible&&!document.hidden)this.frame=requestAnimationFrame(t=>this.tick(t));}
     tick(time){
-      this.frame=0;if(!this.visible||document.hidden)return;
+      this.frame=0;if(!this.visible||document.hidden){this.lastFrameTime=null;return;}
+      const delta=Math.max(0,Math.min(64,time-(this.lastFrameTime??(time-16))));this.lastFrameTime=time;
       const dragging=[...this.pointers.values()].some(p=>p.node);
       if(this.alpha>.002&&this.model.nodes.length){
         const energy=step(this.model,this.settings,this.alpha);this.alpha*=.975;this.ticks++;
         if(!dragging&&(this.ticks>420||(energy<.0004&&this.ticks>45)))this.alpha=0;
       }
-      if(this.autoFit&&this.ticks%6===0&&this.alpha>.002)this.fit(true);
+      // Follow formation every frame instead of jumping the camera every sixth tick.
+      const cameraMoving=this.autoFit&&this.model.nodes.length?this.fit(true,false,1-Math.exp(-delta/130)):false;
       this.draw(time);this.canvas.dataset.simulation=this.alpha>.002?'settling':'idle';
       const pulses=this.settings.pulses&&!this.motion.matches&&this.model.edges.some(e=>e.finding);
-      if(this.alpha>.002||dragging||pulses)this.wake();
+      if(this.alpha>.002||dragging||pulses||cameraMoving)this.wake();else this.lastFrameTime=null;
     }
     draw(time=performance.now()){
       const ctx=this.ctx;if(!this.width||!ctx)return;

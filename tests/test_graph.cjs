@@ -173,3 +173,23 @@ test('service layers and service-name searches require cited component associati
   assert(matches.nodes.some(n=>n.path==='api/main.py'));
   assert(!matches.nodes.some(n=>n.path==='lib/client.py'));
 });
+
+test('auto-fit follows moving bounds every frame and renders only once per frame', () => {
+  const originalDocument=globalThis.document;
+  try {
+    globalThis.document={hidden:false};
+    const view=Object.create(CanvasView.prototype);let draws=0,wakes=0;
+    Object.assign(view,{camera:{x:0,y:0,z:1},width:800,height:400,autoFit:true,
+      model:{nodes:[{id:'a',x:400,y:200,radius:8}],edges:[]},settings:{pulses:false},
+      motion:{matches:false},visible:true,pointers:new Map(),alpha:0,ticks:1,canvas:{dataset:{}},
+      draw(){draws++;},wake(){wakes++;}});
+    const positions=[];
+    for(let i=0;i<5;i++){view.tick(16*(i+1));positions.push(view.camera.x);}
+    assert.equal(draws,5);
+    assert.equal(wakes,5);
+    assert(positions.every((x,i)=>i===0||x!==positions[i-1]),'No six-frame camera plateaus');
+    // Zoom/pan ownership remains respected while physics continues.
+    view.autoFit=false;const camera={...view.camera};view.tick(96);
+    assert.deepEqual(view.camera,camera);
+  } finally {if(originalDocument===undefined)delete globalThis.document;else globalThis.document=originalDocument;}
+});
