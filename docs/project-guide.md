@@ -213,6 +213,8 @@ These checks do not implement semantic proof, a vulnerability solver, or a guara
 
 Impact and confidence are separate qualitative labels: High, Medium, or Low. They are not calibrated probabilities. Published CVSS belongs to advisory metadata, not automatically to repository files or model findings.
 
+New reviews include structured prerequisite assessments (`supported`, `contradicted`, `unknown`) with repository/incident references. Supported concerns require complete, directly observed assessments and no missing information; cited contradictions reject the match and retain the reason. This policy still relies on model interpretation and does not prove semantics.
+
 A recommendation includes its mechanism, prerequisite, code and incident references, explanation, counterevidence, missing information, preventive action, and safe verification step. The report also includes overview, coverage, research evidence, structured discovery, existing defenses, rejected matches, open questions, and provenance where available.
 
 | Saved artifact | Contents |
@@ -284,9 +286,9 @@ PORT=8765
 | `GITHUB_TOKEN` | Optional for public GitHub API access; required for VCDB code-search discovery. |
 | `PORT` | Default local port; `--port` overrides it. |
 
-Existing process environment values take precedence over `.env`. Restart the server after configuration changes. Credential presence means configured, not verified access. Keep real credentials out of version control and browser inputs.
+Settings are loaded and validated explicitly by CLI startup before adapters are imported; importing modules does not read `.env`. Library integrations must call `config.configure()` before importing adapters. Existing process environment values take precedence over `.env`. Restart the server after configuration changes. Credential presence means configured, not verified access. Keep real credentials out of version control and browser inputs.
 
-The source package metadata currently says `0.1.0`, while the README badge says `0.1.8`. This guide does not resolve that existing version-label inconsistency.
+The source package metadata and README version label both identify `0.1.8`.
 
 ## 12. Command-line operation
 
@@ -327,9 +329,10 @@ Base address: `http://127.0.0.1:8765` unless a different port is selected.
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
 | GET | `/api/config` | Public role/search configuration, missing credential names, live-ready flag, request token, demo URL |
-| GET | `/api/jobs` | Latest 50 job summaries |
+| GET | `/api/jobs` | Job summaries; default 50, `limit` 1–200 and `before` job-ID pagination |
 | POST | `/api/jobs` | Queue a live or demo investigation |
-| GET | `/api/jobs/{id}` | Job state, artifacts, report and errors |
+| GET | `/api/jobs/{id}` | Consistent snapshot of job state, artifacts, report and errors |
+| GET | `/api/jobs/{id}/status` | Metadata and monotonic job/payload revisions, without evidence/report |
 | GET | `/api/jobs/{id}/events` | SSE activity stream |
 | POST | `/api/jobs/{id}/cancel` | Request cooperative cancellation |
 | GET | `/api/jobs/{id}/report` | Download Markdown; 409 when unavailable |
@@ -349,7 +352,7 @@ Example submission body:
 
 Mutations require the `X-Review-Token` obtained from `/api/config`; this is a local request-protection token, not a provider key. POST bodies must be nonempty JSON objects and at most 4,096 bytes. Cancellation uses a JSON body such as `{}`.
 
-A successful submission returns HTTP 202 with an `id`. Invalid requests return 400; failed local request protection returns 403; missing jobs return 404; missing credentials/report availability or active-job cleanup conflicts can return 409; a full queue returns 429. The submission guard counts active entries in the latest-50 job listing and rejects when five are active there.
+A successful submission returns HTTP 202 with an `id`. Invalid requests return 400; failed local request protection returns 403; missing jobs return 404; missing credentials/report availability or active-job cleanup conflicts can return 409; a full queue returns 429. Admission counts every active job using the indexed status column and atomically rejects creation when five are active. History pagination does not affect admission or recovery.
 
 SSE activity events carry monotonically assigned event IDs and stage/title/detail/timestamp data. Clients can resume with `Last-Event-ID` or `?after=...`; a finished event signals terminal completion for that stream. Reconnection replays retained events.
 
@@ -366,7 +369,7 @@ Default local storage:
 test-output/            Default CLI/testing exports
 ```
 
-SQLite uses WAL mode. Jobs are JSON records with ID, URL, mode, window, timestamps, status, stage states, artifacts, report, and error. Events live in a separate sequenced table. Default runtime data and `.env` are ignored by Git.
+SQLite uses WAL mode and versioned transactional migrations. The `jobs` table retains small JSON metadata plus an indexed status column; `artifacts` and `reports` hold the large payloads separately. Artifact schema versions preserve format provenance (new reviews use version 2). Events live in a separate sequenced table. Status/stage writes never reload or rewrite evidence. Default runtime data and `.env` are ignored by Git. Before upgrading a legacy database, the application writes a consistent `reviews.sqlite3.v0.bak` backup; a failed migration rolls back the schema and data.
 
 | Job status | Meaning |
 | --- | --- |
@@ -378,13 +381,28 @@ SQLite uses WAL mode. Jobs are JSON records with ID, URL, mode, window, timestam
 | partial | Report saved with validation warnings or incomplete research conditions |
 | failed | Fatal error prevented normal completion |
 
-Stages can additionally be skipped or partial. A completed status is workflow completion, not proof of full source coverage or semantic accuracy. Closing the browser does not cancel work. Cancellation and the 900-second deadline are cooperative; an in-flight call may finish before stopping.
+Stages can additionally be skipped or partial. A completed status is workflow completion, not proof of full source coverage or semantic accuracy. Closing the browser does not cancel work. Queued cancellation completes immediately. Running cancellation is cooperative. When dequeued, a job that waited more than 900 seconds fails before making provider calls; execution has a separate 900-second budget propagated into outbound requests. Cancellation/deadline checks run between response-body reads; an already-blocked DNS or socket operation must return or time out before stopping.
 
-Server startup marks interrupted active jobs found in the recent-job listing as failed while retaining evidence. Recovery currently iterates the latest 50 jobs rather than scanning every historical row; there is no automatic resume.
+The server and review CLI take an OS-backed exclusive data-directory lock before opening storage. A second instance fails without recovering another process’s jobs. Server recovery occurs after a successful port bind and includes all active jobs; evidence is retained and automatic resume is not implemented. Shutdown drains bounded HTTP handlers, requests cancellation, and retains ownership until the worker exits. The local server allows at most 16 concurrent client connections and uses 10-second socket timeouts.
 
 The cache has a 24-hour TTL, at most 64 JSON entries, and a 2 MB entry ceiling. It stores bounded metadata, normalized knowledge, fetched text, and extraction results. Full STIX bundles and search snippets are not stored as evidence. Extraction keys account for model, schema, instructions, selected content, and token configuration; cached results are validated again. Cache hits retain original acquisition timestamps.
 
 Expiry is a freshness rule, not secure deletion. Cleanup preserves repository source, credentials/settings, and exports outside application history. Cache cleanup skips symlinks and unrelated filenames; SQLite cleanup attempts compaction but does not promise forensic erasure.
+
+### Backup, restore, and retention
+
+Stop the server before maintenance. Each command acquires the same ownership lock:
+
+```powershell
+python run.py --backup test-output/reviews-backup.sqlite3
+python run.py --prune-before "2026-01-01T00:00:00+00:00" --confirm-prune
+```
+
+Backup destinations must be new files; live SQLite database/sidecar paths are rejected. Retention deletes only terminal investigations older than the supplied timezone-aware timestamp, including their events and payloads. It never removes active work. Keep a backup before retention; backups and exports have their own retention needs.
+
+To restore, stop every application process, preserve the current `.devsecops` directory separately, and restore a known-good SQLite backup as `.devsecops/reviews.sqlite3` in a fresh data directory. Do not mix a backup database with old `-wal`/`-shm` sidecars. The next launch validates/upgrades the schema. A backup restores history, not provider credentials or research cache.
+
+The frontend polls the small status view and fetches a full snapshot only when payload revisions change. Concurrent refreshes share one request; stale responses cannot replace newer state. Queue and stage timing metrics are retained in the validation artifact.
 
 ## 15. Budgets and provider failures
 
@@ -407,7 +425,8 @@ Expiry is a freshness rule, not secure deletion. Cleanup preserves repository so
 | Package inventory / queried packages | 24 / three |
 | Merged structured advisories | 24 |
 | Research cache | 24-hour TTL, 64 entries, 2 MB per entry |
-| Overall review | 900 seconds, cooperatively enforced |
+| Queue waiting | 900 seconds before starting a review |
+| Overall execution | 900 seconds, propagated into requests; cooperative cancellation |
 
 Resource categories have separate ceilings; structured discovery does not expand model/search/fetch budgets. The reviewer is reserved a call when extraction is considered. More expensive research may leave no room for follow-up and re-review.
 
@@ -455,18 +474,24 @@ The loopback server is a development/local application. Internet-facing deployme
 | `devsecops/knowledge.py` | Official ATT&CK normalization, bounded technique/history discovery |
 | `devsecops/context.py` | Passage ranking, token estimates, reduced researcher/reviewer views |
 | `devsecops/cache.py` | Expiring bounded research cache and cleanup |
-| `devsecops/evidence.py` | Reference validation, classification downgrades and Markdown report assembly |
-| `devsecops/store.py` | SQLite jobs/events, transitions, history and cleanup |
+| `devsecops/evidence.py` | Reference validation and deterministic prerequisite/classification policy |
+| `devsecops/reporting.py` | Safe Markdown report assembly |
+| `devsecops/ownership.py`, `devsecops/execution.py` | Exclusive process ownership and request deadline/cancellation contexts |
+| `devsecops/migrations.py` | Transactional storage upgrades and pre-upgrade backups |
+| `devsecops/store.py` | Indexed metadata, evidence/report persistence, atomic transitions, backup and retention |
 | `devsecops/demo.py` | Fictional offline fixtures |
 | `devsecops/diagnostics.py` | Small live integration checks |
 | `web/index.html`, `web/styles.css`, `web/app.js` | Browser layout, styling, state, requests and investigation views |
 | `web/graph.js` | Canvas graph model, simulation and interaction |
 | `web/markdown.js` | Local report Markdown renderer |
+| `web/job-updates.js` | Coalesced status refreshes and revision ordering, independent of DOM views |
 | `tests/` | Python fixtures and Node frontend tests |
 | `tools/verify_repositories.py` | Explicit live batch verification utility |
 | `docs/` | Design, verification notes, examples, screenshots and this guide |
 
 ## 18. Testing and verification
+
+The [architecture hardening record](architecture-hardening.md) maps the review findings to changes and remaining deployment limits. GitHub Actions runs the offline suites on Windows/Linux and Python 3.11/3.13; hosted-provider requests are excluded.
 
 Run from the project root:
 
@@ -475,7 +500,7 @@ python -m unittest discover -v
 node --check web/app.js
 node --check web/graph.js
 node --check web/markdown.js
-node --test tests/test_graph.cjs tests/test_markdown.cjs
+node --test tests/test_graph.cjs tests/test_markdown.cjs tests/test_edge_light.cjs tests/test_sunrise.cjs tests/test_job_updates.cjs
 ```
 
 Python fixtures exercise contracts, citations, source eligibility, structured discovery, package uncertainty, caching, provider failures, retry/token guards, orchestration, API protections, diagnostics, and storage cleanup. Node tests cover graph provenance/layout/interactions and report rendering/unsafe content. These are local fixtures, not a fresh hosted-provider benchmark.

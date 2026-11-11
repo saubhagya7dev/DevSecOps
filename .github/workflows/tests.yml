@@ -1,0 +1,39 @@
+name: Tests
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ['3.11', '3.13']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Python regression tests
+        run: python -m unittest discover -v
+      - name: Python syntax
+        run: python -m compileall -q devsecops tools run.py
+      - name: JavaScript syntax
+        run: |
+          node --check web/app.js
+          node --check web/graph.js
+          node --check web/markdown.js
+          node --check web/job-updates.js
+      - name: JavaScript regression tests
+        run: node --test tests/test_graph.cjs tests/test_markdown.cjs tests/test_edge_light.cjs tests/test_sunrise.cjs tests/test_job_updates.cjs
