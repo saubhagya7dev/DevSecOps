@@ -689,6 +689,75 @@ const Sunrise = (() => {
   window.addEventListener('resize', () => activate(roles.find(role => role.getAttribute('aria-pressed') === 'true')));
 })();
 
+// Pointer light for real text: no duplicate text layers or layout changes.
+const LuminousType = (() => {
+  function follow(state, delta, reduced) {
+    const blend=reduced?1:1-Math.exp(-Math.min(delta,64)/65);
+    state.x+=(state.targetX-state.x)*blend;state.y+=(state.targetY-state.y)*blend;
+    state.strength+=(state.targetStrength-state.strength)*blend;
+    if(Math.abs(state.targetStrength-state.strength)<.005)state.strength=state.targetStrength;
+    return Math.abs(state.targetX-state.x)>.1||Math.abs(state.targetY-state.y)>.1||state.strength!==state.targetStrength;
+  }
+  function mount(root=document) {
+    if(!CSS.supports('background-clip','text')||!CSS.supports('color','color-mix(in srgb,white,black)'))return;
+    const motion=matchMedia('(prefers-reduced-motion: reduce)');
+    const selector='h1,h2,h3,p,.intro-role>span,.intro-role>strong,.intro-assurance,.eyebrow,.agent-metric,.agent-operation,.event-title,.event-detail,.brand';
+    const states=new Map();let active=null,frame=0,lastTime=0;
+    function remove(element){
+      element.classList.remove('luminous-text');
+      ['--type-base','--type-x','--type-y','--type-strength'].forEach(key=>element.style.removeProperty(key));
+      states.delete(element);
+    }
+    function tick(time){
+      frame=0;const delta=lastTime?time-lastTime:16;lastTime=time;let moving=false;
+      states.forEach((state,element)=>{
+        if(!element.isConnected){remove(element);return;}
+        moving=follow(state,delta,motion.matches)||moving;
+        if(!state.targetStrength&&!state.strength){remove(element);return;}
+        element.style.setProperty('--type-x',`${state.x}px`);
+        element.style.setProperty('--type-y',`${state.y}px`);
+        element.style.setProperty('--type-strength',`${(state.strength*100).toFixed(2)}%`);
+      });
+      if(moving)schedule();else lastTime=0;
+    }
+    function schedule(){if(!frame&&!document.hidden)frame=requestAnimationFrame(tick);}
+    function light(element,x,y){
+      const previous=states.get(active);if(previous&&active!==element)previous.targetStrength=0;
+      active=element;
+      if(!element){schedule();return;}
+      let state=states.get(element);
+      if(!state){
+        const base=getComputedStyle(element).color;
+        state={x,y,targetX:x,targetY:y,strength:0,targetStrength:1};states.set(element,state);
+        element.style.setProperty('--type-base',base);element.classList.add('luminous-text');
+      }
+      state.targetX=x;state.targetY=y;state.targetStrength=1;schedule();
+    }
+    root.addEventListener('pointermove',event=>{
+      if(event.pointerType==='touch')return;
+      let element=event.target.closest(selector);
+      // Do not make inherited SVG icons or interactive descendants transparent.
+      if(element?.querySelector('svg,input,select,button,a'))element=null;
+      if(!element){light(null);return;}
+      const bounds=element.getBoundingClientRect();light(element,event.clientX-bounds.left,event.clientY-bounds.top);
+    },{passive:true});
+    root.addEventListener('focusin',event=>{
+      const element=event.target.closest('.intro-role')?.querySelector('strong');
+      if(element){const box=element.getBoundingClientRect();light(element,box.width/2,box.height/2);}
+    });
+    root.addEventListener('focusout',()=>light(null));
+    root.addEventListener('scroll',()=>light(null),{passive:true,capture:true});
+    root.documentElement.addEventListener('pointerleave',()=>light(null));
+    window.addEventListener('blur',()=>light(null));
+    root.addEventListener('visibilitychange',()=>{
+      if(document.hidden){states.forEach((_,element)=>remove(element));active=null;}else schedule();
+    });
+    motion.addEventListener('change',schedule);
+  }
+  return {follow,mount};
+})();
+LuminousType.mount();
+
 // Paint only existing rectangular borders near the pointer. The overlay never
 // receives input or changes panel layout, graph drawing, or graph gestures.
 (() => {

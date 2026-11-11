@@ -1725,3 +1725,17 @@ main>.investigation-heading {border-top:1px solid var(--line)}
   .input-card .primary {font-size:11px;padding:11px}
 }
 @media(prefers-reduced-motion:reduce) {.intro-role,.intro-role .role-description {transition:none}}
+
+/* Localized text light retains the original readable color outside the beam. */
+@supports (background-clip:text) {
+  .luminous-text {
+    background-image:radial-gradient(ellipse 140px 100px at var(--type-x) var(--type-y),
+      color-mix(in srgb,#fff var(--type-strength),var(--type-base)) 0%,
+      color-mix(in srgb,#dac9ff var(--type-strength),var(--type-base)) 28%,
+      var(--type-base) 75%);
+    background-clip:text;
+    -webkit-background-clip:text;
+    color:transparent!important;
+  }
+}
+@media(forced-colors:active) {.luminous-text {background:none;color:CanvasText!important}}
