@@ -11,6 +11,10 @@ def now():
     return datetime.now(timezone.utc).isoformat()
 
 
+class QueueFull(ValueError):
+    pass
+
+
 class Store:
     def __init__(self, path=None):
         self.path = path or DATA / 'reviews.sqlite3'
@@ -33,11 +37,14 @@ class Store:
         finally:
             db.close()
 
-    def create(self, repo, mode, days):
+    def create(self, repo, mode, days, capacity=None):
         job = {'id': uuid.uuid4().hex, 'repository_url': repo, 'mode': mode, 'days': days,
                'status': 'queued', 'created_at': now(), 'updated_at': now(),
                'stages': {s: 'queued' for s in STAGES}, 'artifacts': {}, 'report': '', 'error': ''}
         with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            if capacity is not None and self._active_count(db) >= capacity:
+                raise QueueFull('Analysis queue is full. Wait for a job to finish.')
             db.execute('INSERT INTO jobs VALUES (?,?)', (job['id'], json.dumps(job)))
         return job
 
@@ -102,8 +109,42 @@ class Store:
             rows = db.execute('SELECT data FROM jobs ORDER BY rowid DESC LIMIT 50').fetchall()
         return [{k: v for k, v in json.loads(row[0]).items() if k not in ('report', 'artifacts')} for row in rows]
 
+    @staticmethod
+    def _active_count(db):
+        return sum(json.loads(row[0])['status'] in ('queued', 'running', 'cancelling')
+                   for row in db.execute('SELECT data FROM jobs'))
+
+    def count_active(self):
+        with self.connect() as db:
+            return self._active_count(db)
+
+    def cancel(self, job_id):
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT data FROM jobs WHERE id=?', (job_id,)).fetchone()
+            if not row:
+                return None
+            job = json.loads(row[0])
+            if job['status'] == 'queued':
+                job['status'] = 'cancelled'
+                job['stages'] = {s: 'skipped' for s in job['stages']}
+            elif job['status'] == 'running':
+                job['status'] = 'cancelling'
+            else:
+                return job['status']
+            job['updated_at'] = now()
+            db.execute('UPDATE jobs SET data=? WHERE id=?', (json.dumps(job), job_id))
+            return job['status']
+
+    def list_active(self):
+        with self.connect() as db:
+            jobs = [json.loads(row[0]) for row in db.execute('SELECT data FROM jobs')]
+        return [job for job in jobs if job['status'] in ('queued', 'running', 'cancelling')]
+
     def recover(self):
-        for job in self.list():
+        with self.connect() as db:
+            jobs = [json.loads(row[0]) for row in db.execute('SELECT data FROM jobs')]
+        for job in jobs:
             if job['status'] in ('queued', 'running', 'cancelling'):
                 stages = {k: ('failed' if v == 'running' else 'skipped' if v == 'queued' else v) for k, v in job['stages'].items()}
                 self.update(job['id'], status='failed', stages=stages, error='Server restarted during this analysis. Start a new review; saved evidence remains available.')

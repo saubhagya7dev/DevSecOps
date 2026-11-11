@@ -26,6 +26,8 @@ class Runner:
         started = time.monotonic()
         store = self.store
         job = store.get(job_id)
+        if not job or job['status'] in ('completed', 'partial', 'failed', 'cancelled'):
+            return
         stage = 'prepare'
         warnings = []
 

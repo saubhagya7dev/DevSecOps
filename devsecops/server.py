@@ -12,7 +12,8 @@ from .config import ROOT, missing_credentials, provider_configuration
 from .demo import DEMO_URL
 from .pipeline import Runner
 from .repository import parse_repo
-from .store import Store
+from .store import Store, QueueFull
+from .ownership import InstanceLock
 from .cache import ResearchCache
 
 TERMINAL = {'completed', 'partial', 'failed', 'cancelled'}
@@ -156,9 +157,10 @@ def make_handler(store, runner, token, cache=None):
                     if type(days) is not int or not 7 <= days <= 730:
                         raise ValueError('Research window must be between 7 and 730 days.')
                     with submission_lock:
-                        if sum(j['status'] in ('queued', 'running', 'cancelling') for j in store.list()) >= 5:
-                            return self.send(429, {'error': 'Analysis queue is full. Wait for a job to finish.'})
-                        job = store.create(f'https://github.com/{owner}/{name}', mode, days)
+                        try:
+                            job = store.create(f'https://github.com/{owner}/{name}', mode, days, capacity=5)
+                        except QueueFull as exc:
+                            return self.send(429, {'error': str(exc)})
                         store.emit(job['id'], 'prepare', 'Analysis queued', 'One worker processes reviews in order; closing the page does not cancel the job.')
                         runner.submit(job['id'])
                     return self.send(202, {'id': job['id']})
@@ -167,9 +169,10 @@ def make_handler(store, runner, token, cache=None):
                     job = store.get(match[1])
                     if not job:
                         return self.send(404, {'error': 'Analysis not found.'})
-                    if store.transition(job['id'], {'queued', 'running'}, status='cancelling'):
+                    status = store.cancel(job['id'])
+                    if status == 'cancelling':
                         store.emit(job['id'], 'prepare', 'Cancellation requested', 'The current network/model call may finish before the worker stops.')
-                    return self.send(200, {'status': store.get(job['id'])['status']})
+                    return self.send(200, {'status': status})
                 return self.send(404, {'error': 'Not found.'})
             except (ValueError, TypeError, UnicodeError):
                 return self.send(400, {'error': 'Invalid request. Use a public GitHub repository URL and a supported research window.'})
@@ -178,11 +181,16 @@ def make_handler(store, runner, token, cache=None):
 
 
 def serve(port=8765):
+    with InstanceLock():
+        _serve(port)
+
+
+def _serve(port):
     store = Store()
-    store.recover()
     runner = Runner(store)
     handler = make_handler(store, runner, secrets.token_urlsafe(32))
     server = ThreadingHTTPServer(('127.0.0.1', port), handler)
+    store.recover()
     server.daemon_threads = True
     print(f'DevSecOps is running at http://127.0.0.1:{server.server_port}', flush=True)
     print('Live analysis configured.' if not missing_credentials() else
@@ -193,4 +201,6 @@ def serve(port=8765):
         pass
     finally:
         server.server_close()
-        runner.pool.shutdown(wait=False, cancel_futures=True)
+        for job in store.list_active():
+            store.cancel(job['id'])
+        runner.pool.shutdown(wait=True, cancel_futures=True)
