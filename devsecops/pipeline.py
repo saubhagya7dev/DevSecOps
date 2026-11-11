@@ -10,6 +10,7 @@ from .config import MAX_JOB_SECONDS, MAX_QUEUE_SECONDS, ROLE_MODELS, missing_cre
 from .demo import fixture
 from .evidence import validate_profile, validate_research, validate_review
 from .reporting import render_report
+from .review_fallback import repository_fallback
 from .repository import inspect_repo
 from .execution import execution_budget, cancellation_checks
 
@@ -82,7 +83,7 @@ class Runner:
             stage_seconds[name] = round(time.monotonic() - stage_started, 3)
             store.artifact(job_id, key, artifact)
             store.stage(job_id, name, state)
-            emit(name, 'Stage skipped' if state == 'skipped' else 'Stage completed',
+            emit(name, 'Stage skipped' if state == 'skipped' else 'Stage partial' if state == 'partial' else 'Stage completed',
                  artifact.get('reason', '') if state == 'skipped' else f'{key.title()} is available in the evidence panel')
 
         with cancellation_checks(checkpoint):
@@ -128,56 +129,64 @@ class Runner:
                 if demo:
                     time.sleep(self.demo_delay)
                 finish('researcher', research, 'research')
-                if research.get('status') in ('failed', 'partial') or not research['sources'] or any(x.startswith(('Source unavailable:', 'Search unavailable:', 'Incident research incomplete:'))
+                if research.get('status') in ('failed', 'partial') or any(x.startswith(('Source unavailable:', 'Search unavailable:', 'Incident research incomplete:'))
                                                   for x in research['research_limitations']):
                     store.stage(job_id, 'researcher', 'partial')
 
-                if research['incidents']:
-                    begin('reviewer', 'Comparing prerequisites, checking counterevidence, and identifying uncertainty')
+                begin('reviewer', 'Comparing incident prerequisites and reviewing repository security improvements' if research['incidents'] else
+                      'Incident evidence unavailable; reviewing repository structure, trust boundaries, and defensive checks')
+                try:
                     review = fixtures[3] if demo else services.review(profile, research, client)
-                    if not demo and review.get('followup_requests') and client.calls <= 4:
-                        request = review['followup_requests'][0]
-                        target = request['target']
-                        emit('reviewer', 'Bounded evidence follow-up', f"{target}: {request['question']}")
-                        store.stage(job_id, target, 'running')
-                        try:
-                            answer = services.followup(request, repo, profile, research, client)
-                            valid_evidence = {o['id'] for o in profile['observations']}
-                            valid_incidents = {i['id'] for i in research['incidents']}
-                            answer['evidence_ids'] = [x for x in answer['evidence_ids'] if x in valid_evidence]
-                            answer['incident_ids'] = [x for x in answer['incident_ids'] if x in valid_incidents]
-                            store.artifact(job_id, 'followup', {'request': request, 'answer': answer})
-                            store.stage(job_id, target, 'completed')
-                            emit(target, 'Follow-up completed', answer['answer'])
-                            review = services.review(profile, research, client, followup=answer)
-                            review['followup_requests'] = []
-                        except (ValueError, OSError) as exc:
-                            review['followup_requests'] = []
-                            review['questions'].append('Unresolved follow-up: ' + request['question'])
-                            for finding in review['findings']:
-                                finding['missing_information'].append('Unresolved follow-up: ' + request['question'])
-                                if finding['classification'] == 'Supported concern':
-                                    finding['classification'] = 'Needs verification'
-                            store.artifact(job_id, 'followup', {'request': request, 'status': 'failed', 'error': str(exc)})
-                            store.stage(job_id, target, 'partial')
-                            warnings.append(f'Bounded follow-up or re-review incomplete: {exc}. Earlier evidence is retained; the question remains unresolved.')
-                            emit(target, 'Follow-up incomplete', str(exc))
-                    elif not demo and review.get('followup_requests'):
-                        review['questions'].extend(request['question'] for request in review['followup_requests'])
+                except (ValueError, OSError) as exc:
+                    warnings.append(f'Hosted security review incomplete: {exc}. Local verification suggestions are provided instead.')
+                    emit('reviewer', 'Hosted review unavailable', str(exc))
+                    review = repository_fallback(profile, 'Hosted reviewer unavailable; these are local checks, not a completed hosted assessment.')
+                    review['status'] = 'partial'
+                if not demo and review.get('followup_requests') and client.calls <= 4:
+                    request = review['followup_requests'][0]
+                    target = request['target']
+                    emit('reviewer', 'Bounded evidence follow-up', f"{target}: {request['question']}")
+                    store.stage(job_id, target, 'running')
+                    try:
+                        answer = services.followup(request, repo, profile, research, client)
+                        valid_evidence = {o['id'] for o in profile['observations']}
+                        valid_incidents = {i['id'] for i in research['incidents']}
+                        answer['evidence_ids'] = [x for x in answer['evidence_ids'] if x in valid_evidence]
+                        answer['incident_ids'] = [x for x in answer['incident_ids'] if x in valid_incidents]
+                        store.artifact(job_id, 'followup', {'request': request, 'answer': answer})
+                        store.stage(job_id, target, 'completed')
+                        emit(target, 'Follow-up completed', answer['answer'])
+                        review = services.review(profile, research, client, followup=answer)
                         review['followup_requests'] = []
-                        warnings.append('Reviewer follow-up omitted to preserve the six-call model budget; unresolved questions remain open.')
-                else:
-                    failed = research.get('status') == 'failed'
-                    review = {'summary': 'Security review was not performed because incident research failed. Resolve the research error and start a new run.' if failed else
-                              'Security review was skipped because no supported incidents were available. This is not a declaration of security.',
-                              'findings': [], 'existing_defenses': [], 'rejected_matches': [],
-                              'questions': ['Review source availability and provider limits before drawing security conclusions.'], 'followup_requests': [],
-                              'status': 'skipped', 'reason': research.get('error') or 'No supported incident evidence was acquired within the searched coverage.'}
+                    except (ValueError, OSError) as exc:
+                        review['followup_requests'] = []
+                        review['questions'].append('Unresolved follow-up: ' + request['question'])
+                        for finding in review['findings']:
+                            finding['missing_information'].append('Unresolved follow-up: ' + request['question'])
+                            if finding['classification'] == 'Supported concern':
+                                finding['classification'] = 'Needs verification'
+                        store.artifact(job_id, 'followup', {'request': request, 'status': 'failed', 'error': str(exc)})
+                        store.stage(job_id, target, 'partial')
+                        warnings.append(f'Bounded follow-up or re-review incomplete: {exc}. Earlier evidence is retained; the question remains unresolved.')
+                        emit(target, 'Follow-up incomplete', str(exc))
+                elif not demo and review.get('followup_requests'):
+                    review['questions'].extend(request['question'] for request in review['followup_requests'])
+                    review['followup_requests'] = []
+                    warnings.append('Reviewer follow-up omitted to preserve the six-call model budget; unresolved questions remain open.')
                 review, rejected = validate_review(review, profile, research)
                 warnings.extend(rejected)
+                if not review['findings']:
+                    local = repository_fallback(profile)
+                    review['findings'] = local['findings']
+                    review['questions'] = list(dict.fromkeys(review['questions'] + local['questions']))
+                    review['supplement'] = local['origin']
+                    review, extra_rejected = validate_review(review, profile, research)
+                    warnings.extend(extra_rejected)
+                if not research['incidents']:
+                    review['scope'] = 'repository-only; no incident connection established'
                 if demo:
                     time.sleep(self.demo_delay)
-                finish('reviewer', review, 'review', 'completed' if research['incidents'] else 'skipped')
+                finish('reviewer', review, 'review', review.get('status', 'completed'))
 
                 begin('validation', 'Checking evidence references and assembling the cited report')
                 validation = {'queue_seconds': round(queue_seconds, 3), 'stage_seconds': stage_seconds,
