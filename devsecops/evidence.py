@@ -44,6 +44,9 @@ def validate_research(research, days, today=None):
             warnings.append(f"Rejected incident {incident['id']}: source passage could not be verified.")
             continue
         ids.add(incident['id'])
+        # Official defensive guidance may illustrate attacks, but is not an observed campaign.
+        if source.get('url', '').startswith('https://cheatsheetseries.owasp.org/cheatsheets/'):
+            incident['source_type'] = 'background guidance'
         try:
             published = date.fromisoformat(incident['publication_date'])
             incident['recency'] = 'Recent report' if since <= published <= today else 'Background / outside window'
