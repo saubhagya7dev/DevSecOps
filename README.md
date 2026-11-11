@@ -9,7 +9,7 @@ One public GitHub URL. Three AI roles. A traceable path from source code to prev
 [![Multi-agent orchestration](https://img.shields.io/badge/Multi--agent%20orchestration-3%20roles-8A63D2)](#architecture)
 [![RAG](https://img.shields.io/badge/RAG-passage%20grounding-8A63D2)](#how-it-works)
 [![API](https://img.shields.io/badge/API-Gemini%20%7C%20Groq%20%7C%20Tavily-4285F4)](#configure-live-analysis)
-[![Tests passed](https://img.shields.io/badge/tests%20passed-134%20local-2EA44F)](#development-and-verification)
+[![Tests passed](https://img.shields.io/badge/tests%20passed-207%20local-2EA44F)](#development-and-verification)
 [![SQLite](https://img.shields.io/badge/storage-SQLite-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 ![Runtime dependencies](https://img.shields.io/badge/runtime_dependencies-0-2EA44F)
 [![Version](https://img.shields.io/badge/version-0.1.9-green)](pyproject.toml)
@@ -21,7 +21,7 @@ One public GitHub URL. Three AI roles. A traceable path from source code to prev
 
 ![DevSecOps black investigation workbench with repository graph, evidence inspector, and event timeline](docs/assets/investigation-workbench.png)
 
-> **Version 0.1.9 baseline:** This checkpoint preserves the existing read-only investigation workflow before broader incident discovery and repository-only reviewer fallback are implemented. The current research limits and skipped-review behavior are documented below.
+> **Version 0.1.9:** Baseline recorded in commit `fa1683f` before the discovery upgrade. Subsequent commits broaden recent/historical/guidance searches and keep the Security Reviewer active with repository-grounded improvements when incident evidence is unavailable.
 
 > **Current scope:** a local, static, read-only review assistant. It investigates repository evidence and documented attack mechanisms; it does not establish production exposure, execute target code, exploit weaknesses, or apply fixes.
 
@@ -209,7 +209,9 @@ The current search allowlist covers:
 | [JFrog Security Research](https://research.jfrog.com/) | Original software supply-chain and malicious-package research. |
 | [Wiz Research](https://www.wiz.io/blog) | Original cloud and software supply-chain incident analysis. |
 
-Qwen first generates up to two bounded search queries. The backend submits them to Tavily with the primary-source domain allowlist and publication-window dates. If no useful evidence survives retrieval or quote-validated extraction, one reserved deterministic query broadens the search without a date filter; older and undated results remain explicitly labeled. Candidates are interleaved across queries. Weekly vulnerability indexes, community answers, and product tutorials are excluded from incident discovery. Candidate URLs come from **Tavily metadata and Python-normalized official advisory/knowledge references**. URLs merely written in model-generated prose are ignored. The backend independently retrieves eligible pages before they can support an incident record, and checks that the cited passage exists in the fetched text.
+At low researcher allowances, Python builds two recent queries from observed technologies and security-relevant behavior. At larger allowances, Qwen can plan up to two recent queries. If no observed attack is accepted, Python adds up to three historical/mechanism queries and one guidance query without date restrictions, within **six total Tavily HTTP requests**, including retries. Background/advisory records do not stop this expansion. Each request returns at most eight candidates. The allowlist additionally supports Elastic Security Labs, CrowdStrike, SentinelOne Labs, Red Canary, Check Point Research, and individual OWASP cheat sheets. Guidance remains background evidence, not an observed incident.
+
+Candidate URLs come from **Tavily metadata and Python-normalized official advisory/knowledge references**. URLs merely written in model-generated prose are ignored. Eligible original pages must be independently retrieved and quoted. Homepages, weekly indexes, community answers, and marketing pages remain excluded. The Incidents tab and Markdown report show query text, recent/historical/guidance phase, completion/failure, and eligible-result counts.
 
 Article/main content is preferred over navigation. Full fetched text is retained up to the per-page context bound, while incident extraction receives selected contiguous passages totaling at most **6,000 characters** across sources. Extraction receives source passages without the target profile, so missing proof of target compromise cannot be used to discard a documented external incident. Repository relevance and prerequisites are assessed separately by the Reviewer. Accepted quotes must still match the retained source text. The reviewer receives at most four accepted incident summaries and sixteen compact repository observations, rather than full HTML-page text. These context bounds can omit relevant details and are recorded as limitations.
 
@@ -219,9 +221,9 @@ Structured discovery adds OSV and GitHub global advisories, official MITRE ATT&C
 
 ### 3. Review the connection
 
-The **Security Reviewer** compares an attack's requirements against the accepted repository evidence. It is instructed to look for existing defenses, reject weak matches, and preserve uncertainty.
+The **Security Reviewer** compares an attack's requirements against the accepted repository evidence. It is instructed to look for existing defenses, reject weak matches, and preserve uncertainty. It also reviews repository security when research is empty or fails. **Repository improvement** findings require valid code citations and concrete action/verification steps, with no incident IDs or attack-prerequisite claims. If hosted review fails, explicitly labeled local verification suggestions preserve useful output and the run remains partial. If no direct code observations survived validation, the output contains specific evidence/deployment questions instead of fabricated findings.
 
-Every accepted recommendation needs an evidence chain:
+Every incident-linked recommendation needs an evidence chain:
 
 ```text
 Documented mechanism
@@ -337,6 +339,7 @@ The activity feed shows observable operations and concise explanations—not pri
 | **Supported concern** | Observed repository evidence supports a relevant attack prerequisite. | Review the cited code and verify remaining exploit conditions. |
 | **Needs verification** | The connection depends on missing version, configuration, trust-boundary, or deployment evidence. | Resolve the specific open questions before drawing a conclusion. |
 | **Background lesson** | Useful context without evidence of the required repository weakness. | Treat it as background guidance, not a detected vulnerability. |
+| **Repository improvement** | Code-cited defensive improvement or verification suggestion, independent of an incident. | Check existing controls and deployment context; no vulnerability is asserted. |
 
 **Impact and confidence are separate qualitative labels.** They are not calibrated probabilities or a numeric security score. A supported concern is not proof of exploitation, and “no matches” is not a security clearance.
 
@@ -430,7 +433,7 @@ Runtime data lives in the ignored `.devsecops/reviews.sqlite3` file; the bounded
 | Per-page stored context | Up to 18,000 characters |
 | Total source text sent for extraction | Up to 6,000 characters, selected contiguous passages |
 | Groq request body | At most 18,000 UTF-8 bytes; a conservative size guard, not a tokenizer |
-| Tavily search requests | Up to three; each returns at most six candidates |
+| Tavily search requests | Up to six, including retries; each returns at most eight candidates |
 | Model calls | Up to six, including an optional follow-up and re-review |
 | Model output | Analyst: 6,500; query planning: 700; Groq full extraction/review: 2,300; low-quota extraction: 192; follow-up: 1,000 |
 | Structured API/dataset requests | Up to twelve total, including retries; at most two bounded dataset downloads |
@@ -438,7 +441,7 @@ Runtime data lives in the ignored `.devsecops/reviews.sqlite3` file; the bounded
 | Model HTTP attempts | Up to nine: six logical calls plus at most three retries |
 | Job deadline | 900 seconds, checked between operations |
 
-At allowances below 4,000, Python plans searches and Qwen interprets one ranked passage through a compact contract. At the default 1,000 allowance, this uses at most 450 source characters and a 192-token output reserve. Exact transmitted quotations are assigned and checked in Python; dates and victims remain unknown. This mode prevents oversized requests but provides narrow research coverage; it does not guarantee incident relevance. See [the discovery design](docs/incident-discovery.md).
+At allowances below 4,000, Python plans searches and Qwen interprets one ranked passage per extraction batch through a compact contract; a second batch selects another source if available. At the default 1,000 allowance, this uses at most 450 source characters and a 192-token output reserve. Exact transmitted quotations are assigned and checked in Python; dates and victims remain unknown. This mode prevents oversized requests but provides narrow research coverage; it does not guarantee incident relevance. See [the discovery design](docs/incident-discovery.md).
 
 If repository preparation stops with **GitHub API rate limit exhausted**, wait until the displayed reset time or configure the optional server-side `GITHUB_TOKEN` and restart. The application reads public repositories through the GitHub API; unauthenticated requests share an IP-based allowance. This failure occurs before model analysis and does not indicate a Gemini/Groq credential problem.
 
@@ -446,9 +449,9 @@ Defaults live in [config.py](devsecops/config.py), with request limits in [provi
 
 **Cancellation is cooperative.** An in-flight network/model request can finish after cancellation is requested, and a provider charge may already have occurred.
 
-A failed extraction retains retrieved sources and the provider error in the partial report. If no accepted incidents are available, the reviewer is marked **skipped**, rather than completed. The UI distinguishes research failure from a completed search with no supported matches.
+A failed extraction retains retrieved sources and the provider error in the partial report. The reviewer still runs on repository evidence. Empty completed searches, failed research, hosted-review failures, and local verification supplements remain explicitly distinguishable. Broader search can consume more Tavily credits; model call, token, page-fetch, and runtime ceilings remain bounded.
 
-A model request receiving HTTP 429 is retried at most once only when the provider supplies a `Retry-After` of at most 60 seconds. HTTP 503 also receives at most one retry, honoring a short reset or using a 1–3 second jittered wait when no reset is supplied. See [Gemini availability diagnostics](docs/gemini-availability.md). There are at most three retries per job; waits check cancellation. Requests larger than the reported token limit, daily quotas, missing reset information, and longer waits fail explicitly. Provider error bodies and organization IDs are not displayed; only safe status and rate-limit numbers are extracted. Byte limits and small output budgets cannot guarantee a fit for every account’s token quota.
+A model request receiving HTTP 429 is retried at most once only when the provider supplies a `Retry-After` of at most 60 seconds. HTTP 503 also receives at most one retry, honoring a short reset or using a 1–3 second jittered wait when no reset is supplied. See [Gemini availability diagnostics](docs/gemini-availability.md). There are at most three retries per job; waits check cancellation. Requests larger than the reported token limit, daily quotas, missing reset information, and longer waits fail explicitly. Provider error bodies and organization IDs are not displayed; only safe status/rate-limit numbers and a fixed structured-generation failure code are extracted. A recognized Groq JSON-generation HTTP 400 may retry once within the same shared retry/token budgets; generic HTTP 400 errors are not retried. Groq strict schema mode is used for GPT-OSS, with best-effort schema mode plus local validation for Qwen. Byte limits and small output budgets cannot guarantee a fit for every account’s token quota.
 
 A successful `--check-apis` smoke test confirms small-request access. It does **not** establish that full repository workloads fit your account’s token-per-minute/day limits. Check the [Groq Limits page](https://console.groq.com/settings/limits) and [rate-limit documentation](https://console.groq.com/docs/rate-limits) if throttling persists. A request larger than a model’s entire per-minute allowance cannot succeed just by waiting; raise that allowance or explicitly configure another compatible model.
 
@@ -464,12 +467,12 @@ python -m compileall -q devsecops run.py
 # Optional JavaScript syntax check; requires Node.js
 node --check web/app.js
 node --check web/graph.js
-node --test tests/test_graph.cjs tests/test_markdown.cjs
+node --test tests/test_*.cjs
 ```
 
 The tests badge records a locally verified run, not a CI status or live-provider availability check.
 
-The current suite contains **111 Python test cases**, plus **23 Node.js tests** (19 graph and 4 Markdown preview tests) covering:
+The current suite contains **161 Python test cases**, plus **46 Node.js tests** (graph, report preview, reviewer presentation, UI lighting, and refresh behavior) covering:
 
 - Citation rejection, evidence-reference integrity, date handling, and unknowns.
 - Markdown preview formatting and rejection of executable HTML/link targets.
@@ -484,7 +487,7 @@ The current suite contains **111 Python test cases**, plus **23 Node.js tests** 
 
 API tests need permission to open and connect to loopback sockets. Temporary test data stays under ignored `test-output/`.
 
-**Verification scope:** all 111 Python tests and 23 JavaScript tests pass after the investigation workbench update, including the complete mocked Gemini/Groq/Tavily workflow and bounded follow-up. Browser checks covered an offline run through all three agents, workflow inspection, completion/report actions, fresh-investigation reset, the cleanup dialog, and a square mobile graph without horizontal overflow. Destructive cleanup tests used disposable fixtures; existing user history was preserved. Earlier checks exercised downloads and public GitHub ingestion. Live API smoke checks are separate from a complete repository review; run `--check-apis` to verify your effective configuration. The four-repository live integration results and rerun command are recorded in [live verification](docs/live-verification-2026-10-31.md). The current workbench screenshots use saved public repository artifacts; the earlier interface screenshots and included example report use synthetic offline fixtures. These checks are not a live-provider benchmark, a security audit, or evidence that generated recommendations are always correct.
+**Verification scope:** the new search/reviewer scenarios cover empty results, failed retrieval, historical attacks after background-only results, code-only improvements, provider failure fallback, and citation boundaries. A live check using a previously validated SwarmSim snapshot retrieved six pages and accepted a documented 3CX attack plus separate advisory/background material. The Reviewer recovered from structured-output failure; a later re-review hit rate limits and retained its prior assessment in a partial report. A fresh full run separately hit Gemini HTTP 503 before analysis. See [the verification record](docs/research-expansion-verification.md). All 161 Python tests and 46 JavaScript tests pass after the discovery/reviewer update, including the complete mocked Gemini/Groq/Tavily workflow and bounded follow-up. Browser checks covered an offline run through all three agents, workflow inspection, completion/report actions, fresh-investigation reset, the cleanup dialog, and a square mobile graph without horizontal overflow. Destructive cleanup tests used disposable fixtures; existing user history was preserved. Earlier checks exercised downloads and public GitHub ingestion. Live API smoke checks are separate from a complete repository review; run `--check-apis` to verify your effective configuration. The four-repository live integration results and rerun command are recorded in [live verification](docs/live-verification-2026-10-31.md). The current workbench screenshots use saved public repository artifacts; the earlier interface screenshots and included example report use synthetic offline fixtures. These checks are not a live-provider benchmark, a security audit, or evidence that generated recommendations are always correct.
 
 ### Project structure
 
