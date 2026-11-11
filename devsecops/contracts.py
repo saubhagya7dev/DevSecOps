@@ -35,7 +35,7 @@ REVIEW = obj(
     summary=S,
     findings=array(obj(
         id=S, title=S,
-        classification={'type': 'string', 'enum': ['Supported concern', 'Needs verification', 'Background lesson']},
+        classification={'type': 'string', 'enum': ['Supported concern', 'Needs verification', 'Background lesson', 'Repository improvement']},
         impact={'type': 'string', 'enum': ['High', 'Medium', 'Low']},
         confidence={'type': 'string', 'enum': ['High', 'Medium', 'Low']},
         incident_ids=array(S), evidence_ids=array(S), mechanism=S, prerequisite=S,
