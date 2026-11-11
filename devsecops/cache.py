@@ -4,6 +4,7 @@ import json
 import os
 import re
 import time
+import uuid
 from pathlib import Path
 
 from .config import DATA, RESEARCH_CACHE_TTL
@@ -35,7 +36,7 @@ class ResearchCache:
         try:
             self.root.mkdir(parents=True, exist_ok=True)
             target = self.root / (digest(key) + '.json')
-            temporary = target.with_suffix(f'.{os.getpid()}.tmp')
+            temporary = target.with_suffix(f'.{os.getpid()}.{uuid.uuid4().hex}.tmp')
             temporary.write_text(body, encoding='utf-8')
             temporary.replace(target)
             entries = sorted(self.root.glob('*.json'), key=lambda p: p.stat().st_mtime, reverse=True)
@@ -52,7 +53,7 @@ class ResearchCache:
         root = self.root.resolve()
         if not root.exists():
             return []
-        return [p for p in root.iterdir() if re.fullmatch(r'[a-f0-9]{64}(?:\.\d+\.tmp|\.json)', p.name)
+        return [p for p in root.iterdir() if re.fullmatch(r'[a-f0-9]{64}(?:\.\d+(?:\.[a-f0-9]{32})?\.tmp|\.json)', p.name)
                 and not p.is_symlink() and p.is_file() and p.resolve().parent == root]
 
     def storage_stats(self):

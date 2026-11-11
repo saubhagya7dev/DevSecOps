@@ -101,7 +101,7 @@ def make_handler(store, runner, token, cache=None):
                                 self.wfile.write(f"id: {after}\nevent: activity\ndata: {json.dumps(event)}\n\n".encode())
                             self.wfile.write(b': heartbeat\n\n')
                             self.wfile.flush()
-                            saved = store.get(job_id)
+                            saved = store.metadata(job_id)
                             if not saved or (saved['status'] in TERMINAL and not store.events(job_id, after)):
                                 self.wfile.write(b'event: finished\ndata: {}\n\n')
                                 self.wfile.flush()
@@ -166,7 +166,7 @@ def make_handler(store, runner, token, cache=None):
                     return self.send(202, {'id': job['id']})
                 match = re.fullmatch(r'/api/jobs/([a-f0-9]{32})/cancel', self.path)
                 if match:
-                    job = store.get(match[1])
+                    job = store.metadata(match[1])
                     if not job:
                         return self.send(404, {'error': 'Analysis not found.'})
                     status = store.cancel(job['id'])

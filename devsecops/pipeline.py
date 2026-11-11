@@ -25,7 +25,7 @@ class Runner:
     def run(self, job_id):
         started = time.monotonic()
         store = self.store
-        job = store.get(job_id)
+        job = store.metadata(job_id)
         if not job or job['status'] in ('completed', 'partial', 'failed', 'cancelled'):
             return
         stage = 'prepare'
@@ -35,7 +35,7 @@ class Runner:
             store.emit(job_id, stage, title, detail)
 
         def checkpoint():
-            if store.get(job_id)['status'] in ('cancelling', 'cancelled'):
+            if store.metadata(job_id)['status'] in ('cancelling', 'cancelled'):
                 raise Cancelled()
             if time.monotonic() - started > MAX_JOB_SECONDS:
                 raise ValueError('Analysis exceeded its overall time budget. Saved evidence is available; try a smaller repository.')
@@ -162,18 +162,18 @@ class Runner:
             finish('validation', validation, 'validation')
             report = render_report(repo, profile, research, review, warnings, demo)
             checkpoint()
-            status = 'partial' if warnings or store.get(job_id)['stages']['researcher'] == 'partial' else 'completed'
+            status = 'partial' if warnings or store.metadata(job_id)['stages']['researcher'] == 'partial' else 'completed'
             if not store.transition(job_id, {'running'}, report=report, status=status):
                 checkpoint()
                 return
             emit('validation', 'Report ready', f"{len(review['findings'])} recommendation(s) · {len(profile['observations'])} repository observations · {len(research['incidents'])} incident record(s)")
         except Cancelled:
-            stages = {s: ('cancelled' if v == 'running' else 'skipped' if v == 'queued' else v) for s, v in store.get(job_id)['stages'].items()}
+            stages = {s: ('cancelled' if v == 'running' else 'skipped' if v == 'queued' else v) for s, v in store.metadata(job_id)['stages'].items()}
             store.update(job_id, status='cancelled', stages=stages)
             emit(stage, 'Analysis cancelled', 'Saved evidence is retained. No repository changes were made.')
         except Exception as exc:
             # Never emit request payloads, provider response bodies, headers, or credentials.
             message = str(exc) if isinstance(exc, (ValueError, OSError)) else 'Unexpected analysis error. Start a new run; saved evidence is retained.'
-            stages = {s: ('failed' if v == 'running' else 'skipped' if v == 'queued' else v) for s, v in store.get(job_id)['stages'].items()}
+            stages = {s: ('failed' if v == 'running' else 'skipped' if v == 'queued' else v) for s, v in store.metadata(job_id)['stages'].items()}
             store.update(job_id, status='failed', stages=stages, error=message)
             emit(stage, 'Analysis stopped', message)
