@@ -7,7 +7,7 @@ import threading
 import random
 
 from . import contracts
-from .config import ROLE_MODELS, RESEARCHER_TOKEN_BUDGET
+from .config import ROLE_MODELS, RESEARCHER_TOKEN_BUDGET, MAX_SEARCH_REQUESTS, MAX_SEARCH_RESULTS
 from .context import estimate_tokens, smaller_context
 from .network import FetchError, get_json
 
@@ -204,12 +204,12 @@ class ModelClient:
 
     def search(self, query, domains, since, today):
         self.checkpoint()
-        if self.search_calls >= 3:
+        if self.search_calls >= MAX_SEARCH_REQUESTS:
             raise ValueError('Search query budget exhausted.')
         key = os.getenv('TAVILY_API_KEY', '').strip()
         if not key:
             raise ValueError('Live incident research needs TAVILY_API_KEY.')
-        payload = {'query': query, 'search_depth': 'basic', 'topic': 'general', 'max_results': 6,
+        payload = {'query': query, 'search_depth': 'basic', 'topic': 'general', 'max_results': MAX_SEARCH_RESULTS,
                    'include_domains': domains,
                    'include_answer': False, 'include_raw_content': False, 'auto_parameters': False}
         if since is not None:
@@ -219,17 +219,17 @@ class ModelClient:
         for attempt in range(2):
             self.checkpoint()
             self.search_calls += 1
-            self.emit('researcher', 'Searching primary sources', f'Tavily · query {self.search_calls}/3 · {query}')
+            self.emit('researcher', 'Searching primary sources', f'Tavily · query {self.search_calls}/{MAX_SEARCH_REQUESTS} · {query}')
             try:
                 response = get_json('https://api.tavily.com/search',
                                     headers={'Authorization': f'Bearer {key}', 'Content-Type': 'application/json'},
                                     body=json.dumps(payload).encode('utf-8'), timeout=60, limit=1_000_000)
                 break
             except FetchError as exc:
-                if (attempt or self.search_calls >= 3 or exc.status not in (429, 503) or exc.daily_limit
+                if (attempt or self.search_calls >= MAX_SEARCH_REQUESTS or exc.status not in (429, 503) or exc.daily_limit
                         or exc.retry_after is None or exc.retry_after > 30):
                     raise ValueError(f'Tavily search failed: {exc}') from exc
-                self.emit('researcher', 'Search rate limited; waiting', f'Retrying after {exc.retry_after:g}s within the three-search ceiling.')
+                self.emit('researcher', 'Search rate limited; waiting', f'Retrying after {exc.retry_after:g}s within the {MAX_SEARCH_REQUESTS}-request search ceiling.')
                 deadline = time.monotonic() + exc.retry_after
                 while time.monotonic() < deadline:
                     self.checkpoint()
