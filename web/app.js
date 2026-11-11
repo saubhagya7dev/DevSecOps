@@ -544,14 +544,23 @@ const Sunrise = (() => {
   function starsFor(width, height) {
     let seed = 24681357;
     const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
-    return Array.from({length:Math.min(2400, Math.round(width * height / 680))}, () => ({
-      x:random() * width, y:random() * height, radius:.25 + random() * .55,
-      alpha:.09 + Math.pow(random(), 3) * .34, warm:random() > .73,
+    // Stable natural star hues; mostly tiny points with a few larger stars.
+    const palette=['190,215,255','222,233,255','255,247,230','255,221,177','255,189,161'];
+    return Array.from({length:Math.min(700, Math.round(width * height / 2600))}, () => ({
+      x:random()*width,y:random()*height,radius:.23+Math.pow(random(),4)*1.12,
+      alpha:.05+Math.pow(random(),2)*.24,color:palette[Math.floor(random()*palette.length)],
+      glowing:random()>.78,glowRadius:2+random()*3.5,hoverRange:32+random()*50,
+      phase:random()*Math.PI*2,speed:.5+random()*1.1,
     }));
   }
-  function starInfluence(star, pointer, radius=75) {
+  function starInfluence(star, pointer, radius=star.hoverRange||75) {
     return pointer ? Math.pow(Math.max(0,1-Math.hypot(star.x-pointer.x,star.y-pointer.y)/radius),2) : 0;
   }
+  function nearbyStars(stars,pointer,width,height) {
+    return stars.filter(star=>star.glowing&&star.y<horizonAt(star.x,width,height)&&starInfluence(star,pointer)>.005)
+      .sort((a,b)=>starInfluence(b,pointer)-starInfluence(a,pointer)).slice(0,3);
+  }
+
   function create(canvas) {
     const ctx = canvas.getContext('2d', {alpha:false});
     if (!ctx) return {focus() {}};
@@ -590,10 +599,10 @@ const Sunrise = (() => {
       blue.addColorStop(0,'#08090c00');blue.addColorStop(.65,'#0b183c66');blue.addColorStop(1,'#17234e99');
       sky.fillStyle=blue;sky.fillRect(0,0,width,height);
       stars=starsFor(width,height);
-      sky.shadowBlur=3;
       stars.forEach(star=>{
-        sky.shadowColor=star.warm?'#d4b291':'#9cbdf5';
-        sky.fillStyle=star.warm?`rgba(203,163,132,${star.alpha})`:`rgba(148,182,220,${star.alpha})`;
+        sky.shadowBlur=star.glowing?star.glowRadius*.35:0;
+        sky.shadowColor=`rgb(${star.color})`;
+        sky.fillStyle=`rgba(${star.color},${star.alpha})`;
         sky.beginPath();sky.arc(star.x,star.y,star.radius,0,Math.PI*2);sky.fill();
       });
       return true;
@@ -605,12 +614,12 @@ const Sunrise = (() => {
       // Only nearby stars brighten; keep the surrounding sky and text untouched.
       if(pointer){
         ctx.save();ctx.globalCompositeOperation='screen';ctx.shadowBlur=8;
-        stars.forEach(star=>{
+        nearbyStars(stars,pointer,width,height).forEach(star=>{
           const influence=starInfluence(star,pointer);
           if(influence<.015 || star.y>=horizonAt(star.x,width,height))return;
-          ctx.shadowColor=star.warm?'#ffd2a8':'#b4ccff';
-          ctx.fillStyle=`rgba(218,231,255,${influence*.85})`;
-          ctx.beginPath();ctx.arc(star.x,star.y,star.radius+influence*.8,0,Math.PI*2);ctx.fill();
+          ctx.shadowBlur=star.glowRadius*(.5+influence);ctx.shadowColor=`rgb(${star.color})`;
+          ctx.fillStyle=`rgba(${star.color},${influence*.55})`;
+          ctx.beginPath();ctx.arc(star.x,star.y,star.radius*(1+influence*.4),0,Math.PI*2);ctx.fill();
         });ctx.restore();
       }
       const sunX=width*position, sunY=horizonAt(sunX,width,height);
@@ -666,7 +675,7 @@ const Sunrise = (() => {
     schedule();
     return {focus,hover};
   }
-  return {create,horizonAt,starsFor,starInfluence};
+  return {create,horizonAt,starsFor,starInfluence,nearbyStars};
 })();
 
 // Landing-only role emphasis; investigation stages remain controlled by the runner.

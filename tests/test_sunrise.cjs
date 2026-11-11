@@ -18,10 +18,13 @@ test('sun remains attached to the same symmetric curved planetary horizon',()=>{
 test('star texture is deterministic, irregular, bounded, and varies brightness',()=>{
   const stars=scene.starsFor(1000,700);
   assert.equal(JSON.stringify(stars),JSON.stringify(scene.starsFor(1000,700)));
-  assert.ok(stars.length>500);
-  assert.ok(stars.every(s=>s.x>=0&&s.x<1000&&s.y>=0&&s.y<700&&s.radius<1));
+  assert.ok(stars.length>200&&stars.length<300);
+  assert.ok(stars.every(s=>s.x>=0&&s.x<1000&&s.y>=0&&s.y<700&&s.radius<1.4));
   assert.ok(stars.some(s=>s.alpha>.25)&&stars.some(s=>s.alpha<.1));
-  assert.equal(scene.starsFor(10000,10000).length,2400);
+  assert.ok(new Set(stars.map(s=>s.color)).size>=4);
+  assert.ok(stars.filter(s=>s.glowing).length<stars.length*.3);
+  assert.ok(stars.some(s=>s.radius>1)&&stars.some(s=>s.radius<.3));
+  assert.equal(scene.starsFor(10000,10000).length,700);
 });
 function harness(reduced=false) {
   const frames=[],translations=[];let time=0,draws=0;
@@ -67,4 +70,16 @@ test('star hover has a bounded soft falloff and clears without an idle loop',()=
   assert.equal(scene.starInfluence(star,{x:137.5,y:100}),.25);
   const h=harness();h.api.hover({x:100,y:100});assert.equal(h.flush(),1);
   h.api.hover(null);assert.equal(h.flush(),1);assert.equal(h.frames.length,0);
+});
+
+
+test('only three eligible sky stars can receive strong pointer illumination',()=>{
+  const stars=Array.from({length:10},(_,i)=>({x:100+i,y:100,glowing:true,hoverRange:50}));
+  stars.push({x:100,y:100,glowing:false,hoverRange:100});
+  stars.push({x:100,y:690,glowing:true,hoverRange:1000});
+  const selected=scene.nearbyStars(stars,{x:100,y:100},1000,700);
+  assert.equal(selected.length,3);assert.equal(selected[0].x,100);
+  assert.ok(selected.every(s=>s.glowing&&s.y===100));
+  assert.equal(scene.starInfluence({...stars[0],hoverRange:32},{x:145,y:100}),0);
+  assert.ok(scene.starInfluence({...stars[0],hoverRange:80},{x:145,y:100})>0);
 });
