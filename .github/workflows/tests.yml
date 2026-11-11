@@ -36,4 +36,4 @@ jobs:
           node --check web/markdown.js
           node --check web/job-updates.js
       - name: JavaScript regression tests
-        run: node --test tests/test_graph.cjs tests/test_markdown.cjs tests/test_edge_light.cjs tests/test_sunrise.cjs tests/test_job_updates.cjs
+        run: node --test tests/test_graph.cjs tests/test_markdown.cjs tests/test_edge_light.cjs tests/test_sunrise.cjs tests/test_job_updates.cjs tests/test_luminous_type.cjs
