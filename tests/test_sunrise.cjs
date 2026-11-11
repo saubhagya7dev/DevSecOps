@@ -37,6 +37,7 @@ function harness(reduced=false) {
     requestAnimationFrame:fn=>{frames.push(fn);return frames.length;},
     ResizeObserver:class {observe(){}},
     IntersectionObserver:class {constructor(fn){visibility=fn;}observe(){}},
+    window:{addEventListener(){}},
     document:{hidden:false,addEventListener(){},createElement:()=>({getContext:()=>({...base})})}};
   const api=vm.runInNewContext(code+'\nSunrise;',sandbox).create(canvas);
   function flush(){let count=0;while(frames.length){if(++count>500)throw Error('Animation did not settle');frames.shift()(time+=16);}return count;}
@@ -56,4 +57,14 @@ test('reduced motion snaps in one frame and offscreen scenes do not redraw',()=>
   h.visibility(false);const before=h.draws;h.api.focus(.16);
   assert.equal(h.flush(),0);assert.equal(h.draws,before);
   h.visibility(true);assert.equal(h.flush(),1);assert.equal(h.translations.at(-1)[0],160);
+});
+
+test('star hover has a bounded soft falloff and clears without an idle loop',()=>{
+  const star={x:100,y:100};
+  assert.equal(scene.starInfluence(star,null),0);
+  assert.equal(scene.starInfluence(star,{x:100,y:100}),1);
+  assert.equal(scene.starInfluence(star,{x:175,y:100}),0);
+  assert.equal(scene.starInfluence(star,{x:137.5,y:100}),.25);
+  const h=harness();h.api.hover({x:100,y:100});assert.equal(h.flush(),1);
+  h.api.hover(null);assert.equal(h.flush(),1);assert.equal(h.frames.length,0);
 });

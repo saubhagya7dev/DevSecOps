@@ -546,14 +546,17 @@ const Sunrise = (() => {
     const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
     return Array.from({length:Math.min(2400, Math.round(width * height / 680))}, () => ({
       x:random() * width, y:random() * height, radius:.25 + random() * .55,
-      alpha:.06 + Math.pow(random(), 3) * .30, warm:random() > .73,
+      alpha:.09 + Math.pow(random(), 3) * .34, warm:random() > .73,
     }));
+  }
+  function starInfluence(star, pointer, radius=75) {
+    return pointer ? Math.pow(Math.max(0,1-Math.hypot(star.x-pointer.x,star.y-pointer.y)/radius),2) : 0;
   }
   function create(canvas) {
     const ctx = canvas.getContext('2d', {alpha:false});
     if (!ctx) return {focus() {}};
     const motion = matchMedia('(prefers-reduced-motion: reduce)');
-    let width=0, height=0, ratio=1, texture=null;
+    let width=0, height=0, ratio=1, texture=null, stars=[], pointer=null;
     let position=.5, target=.5, frame=0, lastTime=0, visible=true;
     function planetPath() {
       ctx.beginPath();
@@ -586,7 +589,10 @@ const Sunrise = (() => {
       const blue=sky.createLinearGradient(0,height*.2,0,height);
       blue.addColorStop(0,'#08090c00');blue.addColorStop(.65,'#0b183c66');blue.addColorStop(1,'#17234e99');
       sky.fillStyle=blue;sky.fillRect(0,0,width,height);
-      starsFor(width,height).forEach(star=>{
+      stars=starsFor(width,height);
+      sky.shadowBlur=3;
+      stars.forEach(star=>{
+        sky.shadowColor=star.warm?'#d4b291':'#9cbdf5';
         sky.fillStyle=star.warm?`rgba(203,163,132,${star.alpha})`:`rgba(148,182,220,${star.alpha})`;
         sky.beginPath();sky.arc(star.x,star.y,star.radius,0,Math.PI*2);sky.fill();
       });
@@ -596,6 +602,17 @@ const Sunrise = (() => {
       if (!prepare()) return;
       ctx.setTransform(canvas.width/width,0,0,canvas.height/height,0,0);
       ctx.drawImage(texture,0,0,width,height);
+      // Only nearby stars brighten; keep the surrounding sky and text untouched.
+      if(pointer){
+        ctx.save();ctx.globalCompositeOperation='screen';ctx.shadowBlur=8;
+        stars.forEach(star=>{
+          const influence=starInfluence(star,pointer);
+          if(influence<.015 || star.y>=horizonAt(star.x,width,height))return;
+          ctx.shadowColor=star.warm?'#ffd2a8':'#b4ccff';
+          ctx.fillStyle=`rgba(218,231,255,${influence*.85})`;
+          ctx.beginPath();ctx.arc(star.x,star.y,star.radius+influence*.8,0,Math.PI*2);ctx.fill();
+        });ctx.restore();
+      }
       const sunX=width*position, sunY=horizonAt(sunX,width,height);
       const scale=height;
       // Wide cool air hugs the whole planet, even opposite the warm sunrise.
@@ -636,12 +653,20 @@ const Sunrise = (() => {
     function focus(value) {target=Math.max(.08,Math.min(.92,value));schedule();}
     const observer=new ResizeObserver(schedule);observer.observe(canvas);
     const visibility=new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;if(visible)schedule();});visibility.observe(canvas);
-    document.addEventListener('visibilitychange',schedule);
+    document.addEventListener('visibilitychange',()=>{if(document.hidden)pointer=null;schedule();});
     motion.addEventListener('change',()=>{if(motion.matches)position=target;schedule();});
+    function hover(point) {pointer=point;schedule();}
+    canvas.parentElement?.addEventListener('pointermove',event=>{
+      if(event.pointerType==='touch')return;
+      const box=canvas.getBoundingClientRect();hover({x:event.clientX-box.left,y:event.clientY-box.top});
+    },{passive:true});
+    canvas.parentElement?.addEventListener('pointerleave',()=>hover(null));
+    window.addEventListener('blur',()=>hover(null));
+    document.addEventListener('scroll',()=>{if(pointer)hover(null);},{passive:true,capture:true});
     schedule();
-    return {focus};
+    return {focus,hover};
   }
-  return {create,horizonAt,starsFor};
+  return {create,horizonAt,starsFor,starInfluence};
 })();
 
 // Landing-only role emphasis; investigation stages remain controlled by the runner.
