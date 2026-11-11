@@ -13,19 +13,28 @@ from .execution import request_deadline, check_execution
 
 
 class FetchError(ValueError):
-    def __init__(self, message, *, status=None, retry_after=None, token_limit=None, requested_tokens=None, daily_limit=False, limit_kind='unknown'):
+    def __init__(self, message, *, status=None, retry_after=None, token_limit=None, requested_tokens=None, daily_limit=False, limit_kind='unknown', error_code=None):
         super().__init__(message)
         self.status, self.retry_after = status, retry_after
         self.token_limit, self.requested_tokens, self.daily_limit = token_limit, requested_tokens, daily_limit
         self.limit_kind = limit_kind
+        self.error_code = error_code
 
 
 def upstream_error(response, host=None):
-    """Extract rate-limit numbers only; never expose provider bodies or organization IDs."""
+    """Extract safe numbers or a fixed validation code; never expose provider bodies."""
     status = response.status
     retry_after = token_limit = requested = None
     daily = False
     limit_kind = 'unknown'
+    if status == 400 and host == 'api.groq.com':
+        try:
+            error = json.loads(response.read(8192)).get('error', {})
+            if isinstance(error, dict) and error.get('code') in ('json_validate_failed', 'json_schema_validation_failed'):
+                return FetchError('Upstream HTTP 400: structured output generation failed.', status=400,
+                                  error_code='json_validate_failed')
+        except (ValueError, TypeError, AttributeError, OSError, http.client.HTTPException):
+            pass
     try:
         value = float(response.getheader('Retry-After', ''))
         if 0 <= value <= 86400:
