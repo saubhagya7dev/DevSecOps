@@ -1,6 +1,7 @@
 """Versioned SQLite layout; upgrades are transactional and retain a pre-upgrade backup."""
 import json
 import sqlite3
+import uuid
 from contextlib import closing
 
 SCHEMA_VERSION = 1
@@ -14,8 +15,13 @@ def migrate(db, path):
     if legacy:
         backup = path.with_name(path.name + '.v0.bak')
         if not backup.exists():
-            with closing(sqlite3.connect(str(backup))) as target:
-                db.backup(target)
+            temporary = backup.with_name(backup.name + '.' + uuid.uuid4().hex + '.tmp')
+            try:
+                with closing(sqlite3.connect(str(temporary))) as target:
+                    db.backup(target)
+                temporary.replace(backup)
+            finally:
+                temporary.unlink(missing_ok=True)
     db.execute('BEGIN IMMEDIATE')
     version = db.execute('PRAGMA user_version').fetchone()[0]
     if version == SCHEMA_VERSION:

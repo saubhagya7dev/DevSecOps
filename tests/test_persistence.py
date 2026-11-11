@@ -78,3 +78,15 @@ class PersistenceTests(unittest.TestCase):
             db.execute('PRAGMA user_version=999')
         with self.assertRaisesRegex(ValueError, 'newer'):
             Store(self.path)
+
+    def test_failed_migration_rolls_back_schema_and_preserves_original(self):
+        with closing(sqlite3.connect(self.path)) as db, db:
+            db.execute('CREATE TABLE jobs (id TEXT PRIMARY KEY, data TEXT NOT NULL)')
+            db.execute('INSERT INTO jobs VALUES (?,?)', ('broken', 'not-json'))
+        with self.assertRaises(ValueError):
+            Store(self.path)
+        with closing(sqlite3.connect(self.path)) as db:
+            self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0], 0)
+            self.assertEqual([r[1] for r in db.execute('PRAGMA table_info(jobs)')], ['id', 'data'])
+            self.assertEqual(db.execute('SELECT data FROM jobs').fetchone()[0], 'not-json')
+        self.assertTrue(self.path.with_name(self.path.name + '.v0.bak').exists())
