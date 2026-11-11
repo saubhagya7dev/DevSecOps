@@ -71,7 +71,7 @@ class ResearchFlowTests(unittest.TestCase):
         result, attempts = self.run_flow(client, {URL_A: FetchError('403'), URL_B: TEXT_B})
         self.assertEqual(attempts, [URL_A, URL_B])
         self.assertEqual(len(result['incidents']), 1)
-        self.assertEqual(client.search_calls, 2)
+        self.assertEqual(client.search_calls, 5)
         self.assertEqual(result['coverage']['page_fetch_attempts'], 2)
         self.assertEqual(result['status'], 'partial')
 
@@ -93,7 +93,7 @@ class ResearchFlowTests(unittest.TestCase):
         client = BlockedPlanner([[], []], [])
         result, attempts = self.run_flow(client, {})
         self.assertEqual(result['coverage']['query_planning'], 'deterministic fallback')
-        self.assertEqual(client.search_calls, 3)
+        self.assertEqual(client.search_calls, 6)
         self.assertEqual(result['status'], 'completed')
         self.assertEqual(result['error'], '')
         self.assertEqual(result['outcome'], 'no relevant incident found within searched coverage')
