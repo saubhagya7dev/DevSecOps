@@ -98,7 +98,7 @@ flowchart TD
     STORE --> UI[Browser progress and history]
 ```
 
-The diagram shows the evidence-bearing path. When no accepted external records are available, the reviewer is skipped and a report can still describe the missing evidence and research limitations. Fatal errors can stop the job before a report exists.
+The diagram shows the evidence-bearing path. When no accepted external records are available, the reviewer still assesses repository evidence for defensive improvements and verification questions. These have no incident IDs and do not assert a vulnerability. Fatal errors can stop the job before a report exists.
 
 The controller, implemented in [`pipeline.py`](../devsecops/pipeline.py), owns stage transitions, persistence, cancellation checkpoints, and the overall deadline. Each role receives selected input and a required JSON contract. The application validates results before using them downstream.
 
@@ -222,7 +222,7 @@ A recommendation includes its mechanism, prerequisite, code and incident referen
 | `repository` | Commit identity, bounded tree, inspected source, skipped files, coverage |
 | `profile` | Technologies, components, observations, questions, unknowns |
 | `research` | Retrieved sources, external records, packages, advisories, techniques, history, mappings, coverage and limitations |
-| `review` | Findings, defenses, rejected matches, unresolved questions, or an explicit skipped result |
+| `review` | Findings, defenses, rejected matches, unresolved questions, or explicit repository-only verification output |
 | `followup`, optional | Request/answer, or failure details |
 | `validation` | Warnings, configured models, per-role usage, request/retry counts, selected-context metadata and interpretation limits |
 
@@ -288,7 +288,7 @@ PORT=8765
 
 Settings are loaded and validated explicitly by CLI startup before adapters are imported; importing modules does not read `.env`. Library integrations must call `config.configure()` before importing adapters. Existing process environment values take precedence over `.env`. Restart the server after configuration changes. Credential presence means configured, not verified access. Keep real credentials out of version control and browser inputs.
 
-The source package metadata and README version label both identify `0.1.8`.
+The source package metadata and README version label both identify `0.1.9`.
 
 ## 12. Command-line operation
 
@@ -415,7 +415,7 @@ The frontend polls the small status view and fetches a full snapshot only when p
 | Saved tree paths / skipped details | First 600 paths / 300 skipped entries |
 | Logical model calls | Six across all roles |
 | Retry attempts for models | One per request, at most three retries per job |
-| Tavily requests | Three, including retries and fallback |
+| Tavily requests | Six, including retries and historical/guidance expansion; up to eight results per request |
 | Narrative fetch attempts / stored sources | Six / six |
 | Narrative response / retained text | 8 MB / 18,000 characters per page |
 | Extraction selection | 6,000 source characters total, at most two sequential batches |
@@ -434,7 +434,7 @@ Researcher input is conservatively estimated from UTF-8 bytes divided by two, pl
 
 Model HTTP 429 retries require a short provider reset and exclude oversized requests/daily exhaustion. HTTP 503 receives one bounded retry, honoring a short reset or using a small jittered wait. Long waits, invalid access, and persistent failures are surfaced. Search and structured API retry policies have separate budgets. No automatic provider/model switch or offline-example substitution conceals a failure.
 
-Failed research preserves available artifacts and can yield a partial report with skipped review. An initial analyst failure can terminate the job before research. Failed follow-up/re-review retains the earlier review, records unresolved questions, and downgrades supported concerns as appropriate.
+Failed research preserves available artifacts and can yield a partial report with repository-only review. An initial analyst failure can terminate the job before research. Failed follow-up/re-review retains the earlier review, records unresolved questions, and downgrades supported concerns as appropriate.
 
 ## 16. Security and data boundaries
 
@@ -519,7 +519,7 @@ The [31 October live verification record](live-verification-2026-10-31.md) docum
 | HTTP 429, request exceeds allowance | Waiting cannot make an intrinsically oversized request fit. Check context and verified account limits. |
 | Daily quota exhausted | Wait for reset or change account limits; the app does not silently switch providers. |
 | GitHub request limit exhausted | Observe the reported reset; optionally configure `GITHUB_TOKEN` and restart. |
-| Reviewer skipped | No accepted external records, upstream failure, or lack of usable evidence; inspect research outcome/coverage. |
+| Repository-only review | No accepted external incident records; code-cited improvements and verification questions still apply. Hosted reviewer failure is labeled partial with local suggestions. |
 | Report is partial | Read rejected citations, failed acquisitions, provider errors and omissions. Available artifacts remain useful for inspection. |
 | No findings | None established within coverage; do not interpret as a security clearance. |
 | Missing repository files | Inspect exclusions, priority ordering, tree truncation and file/context budgets. |
