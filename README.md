@@ -12,7 +12,7 @@ One public GitHub URL. Three AI roles. A traceable path from source code to prev
 [![Tests passed](https://img.shields.io/badge/tests%20passed-134%20local-2EA44F)](#development-and-verification)
 [![SQLite](https://img.shields.io/badge/storage-SQLite-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 ![Runtime dependencies](https://img.shields.io/badge/runtime_dependencies-0-2EA44F)
-[![Version](https://img.shields.io/badge/version-0.1.8-green)](pyproject.toml)
+[![Version](https://img.shields.io/badge/version-0.1.9-green)](pyproject.toml)
 
 [Quick start](#quick-start) · [How it works](#how-it-works) · [Architecture](#architecture) · [Example report](docs/examples/offline-report.md)
 
@@ -20,6 +20,8 @@ One public GitHub URL. Three AI roles. A traceable path from source code to prev
 
 
 ![DevSecOps black investigation workbench with repository graph, evidence inspector, and event timeline](docs/assets/investigation-workbench.png)
+
+> **Version 0.1.9 baseline:** This checkpoint preserves the existing read-only investigation workflow before broader incident discovery and repository-only reviewer fallback are implemented. The current research limits and skipped-review behavior are documented below.
 
 > **Current scope:** a local, static, read-only review assistant. It investigates repository evidence and documented attack mechanisms; it does not establish production exposure, execute target code, exploit weaknesses, or apply fixes.
 
