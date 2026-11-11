@@ -288,7 +288,8 @@ class PipelineTests(unittest.TestCase):
     @patch('devsecops.pipeline.inspect_repo')
     @patch('devsecops.pipeline.analyze_repository')
     @patch('devsecops.pipeline.research_incidents')
-    def test_research_failure_produces_honest_partial_report(self, research, analyst, repository):
+    @patch('devsecops.pipeline.review_security', side_effect=ValueError('Reviewer fixture unavailable'))
+    def test_research_failure_produces_honest_partial_report(self, review, research, analyst, repository):
         r, p, _, _ = fixture()
         repository.return_value, analyst.return_value = r, p
         research.side_effect = FetchError('Source inaccessible')
@@ -296,11 +297,12 @@ class PipelineTests(unittest.TestCase):
         self.runner.run(job['id'])
         result = self.store.get(job['id'])
         self.assertEqual(result['status'], 'partial')
-        self.assertEqual(result['stages']['reviewer'], 'skipped')
-        self.assertEqual(result['artifacts']['review']['status'], 'skipped')
-        self.assertIn('not performed', result['artifacts']['review']['summary'])
-        self.assertEqual(result['artifacts']['review']['findings'], [])
-        self.assertIn('No evidence-backed recommendations', result['report'])
+        review.assert_called_once()
+        self.assertEqual(result['stages']['reviewer'], 'partial')
+        self.assertEqual(result['artifacts']['review']['status'], 'partial')
+        self.assertTrue(result['artifacts']['review']['findings'])
+        self.assertIn('Repository improvement', result['report'])
+        self.assertIn('Hosted security review incomplete', result['report'])
 
     @patch('devsecops.pipeline.answer_followup', side_effect=ValueError('Researcher estimated token budget exhausted'))
     @patch('devsecops.pipeline.review_security')
@@ -326,6 +328,7 @@ class PipelineTests(unittest.TestCase):
     @patch('devsecops.pipeline.inspect_repo')
     def test_full_live_adapter_handoffs_and_bounded_followup(self, repository, model, page):
         repo, profile, research, review = fixture()
+        research['incidents'][0]['source_type'] = 'observed attack'
         repository.return_value = repo
         source_url = 'https://cloud.google.com/blog/topics/threat-intelligence/test-fixture'
         page.return_value = (('<html><body><p>' + research['sources'][0]['text'] + '</p></body></html>').encode(), 'text/html', source_url)
@@ -352,7 +355,7 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(payloads[4]['model'], 'openai/gpt-oss-120b')
         self.assertEqual(payloads[6]['model'], 'openai/gpt-oss-120b')
         self.assertIn(ROLE_MODELS['analyst']['model'] + ':generateContent', model.call_args_list[5].args[0])
-        self.assertEqual(payloads[2]['max_results'], 6)
+        self.assertEqual(payloads[2]['max_results'], 8)
         self.assertFalse(payloads[2]['include_answer'])
         self.assertEqual(result['artifacts']['validation']['search_calls'], 1)
         self.assertEqual(result['artifacts']['validation']['role_usage']['analyst']['calls'], 2)
