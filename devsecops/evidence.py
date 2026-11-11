@@ -82,13 +82,19 @@ def validate_review(review, profile, research):
     incidents = {i['id']: i for i in research['incidents']}
     valid, warnings, ids = [], [], set()
     for finding in review['findings']:
-        if (finding['id'] in ids or not finding['evidence_ids'] or not finding['incident_ids']
+        repository_only = finding['classification'] == 'Repository improvement'
+        if (finding['id'] in ids or not finding['evidence_ids'] or (not repository_only and not finding['incident_ids'])
+                or (repository_only and (finding['incident_ids'] or finding.get('prerequisite_assessments')))
                 or not all(x in observations for x in finding['evidence_ids'])
                 or not all(x in incidents for x in finding['incident_ids'])
                 or not finding['action'].strip() or not finding['verification'].strip()):
             warnings.append(f"Rejected recommendation {finding['id']}: incomplete evidence chain.")
             continue
         ids.add(finding['id'])
+        if repository_only:
+            # A code-grounded improvement is never evidence of an external attack or exploitability.
+            valid.append(finding)
+            continue
         if finding['classification'] == 'Supported concern' and all(observations[x]['kind'] != 'observed' for x in finding['evidence_ids']):
             finding['classification'] = 'Needs verification'
             finding['missing_information'].append('Repository evidence is inferred; confirm the prerequisite.')
