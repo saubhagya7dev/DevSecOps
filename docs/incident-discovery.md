@@ -9,7 +9,7 @@ flowchart TD
     PKG --> ADVISORY[OSV and GitHub global advisories]
     PROFILE --> KNOWLEDGE[Official MITRE ATT&CK and optional VCDB]
     PROFILE --> PLAN[Small Qwen query plan or deterministic query]
-    PLAN --> SEARCH[At most three Tavily searches]
+    PLAN --> SEARCH[At most six Tavily HTTP requests]
     ADVISORY --> POOL[Python reference filtering and ranking]
     KNOWLEDGE --> POOL
     SEARCH --> POOL
@@ -20,8 +20,8 @@ flowchart TD
     GUARD --> EXTRACT[At most two sequential Qwen extraction batches]
     EXTRACT --> QUOTES[Exact quotation validation and incident deduplication]
     QUOTES --> REVIEW[Security Reviewer assesses target applicability]
-    FETCH -. unusable evidence .-> BROAD[One deterministic undated fallback]
-    EXTRACT -. empty or invalid extraction .-> BROAD
+    FETCH -. unusable evidence .-> BROAD[Historical and guidance query expansion]
+    EXTRACT -. no observed attack accepted .-> BROAD
     BROAD --> SEARCH
     ADVISORY --> REPORT[Separate advisory and knowledge sections]
     KNOWLEDGE --> REPORT
@@ -55,13 +55,13 @@ Lockfile versions take precedence over manifest declarations. Exact declaration 
 
 ## Fixed and separate resource budgets
 
-The previous model/search/page-fetch ceilings are preserved. Structured discovery adds independently bounded HTTP work; it does not increase Qwen's call budget.
+The model and page-fetch ceilings are preserved; Tavily expands from three to six requests, with up to eight results per request. Structured discovery adds independently bounded HTTP work; it does not increase Qwen's call budget.
 
 | Resource | Ceiling |
 | --- | --- |
 | Logical model calls across all roles | Six |
 | Model retries | One per request, at most three per job; only short transient limits |
-| Tavily searches | Three total, including undated fallback |
+| Tavily searches | Six HTTP requests including retries; up to eight candidates per request |
 | Narrative acquisition | Six network fetch attempts, with at most six stored sources; first phase reserves capacity for fallback |
 | Narrative download / retained text | 8 MB / 18,000 characters per page |
 | Extraction interpretation | At most two sequential batches, each selecting up to 3,000 source-text characters; 6,000 shared per job |
@@ -87,13 +87,13 @@ For allowances below 4,000 estimated tokens, query planning runs deterministical
 
 Oversized views are rebuilt locally by removing lower-priority sources/passages and optional technique context, without changing source IDs or stored evidence. If instructions/schema alone cannot fit, the request is stopped **before transmission**. Planning falls back to deterministic discovery; blocked extraction preserves sources and structured records in a clearly partial result. Raise the allowance only after verifying that the account actually permits it. A stronger model's context window does not increase account quota.
 
-HTTP 429 requests larger than the reported token limit, daily quotas, missing reset information, and long waits are not repeatedly retried. The model policy permits one retry for transient HTTP 429 with `Retry-After` up to 60 seconds, or HTTP 503 with a short provider reset or jittered delay. Existing job/retry/token budgets remain in force. See [Gemini availability troubleshooting](gemini-availability.md). No model/provider fallback or offline-example substitution occurs.
+HTTP 429 requests larger than the reported token limit, daily quotas, missing reset information, and long waits are not repeatedly retried. The model policy permits one retry for transient HTTP 429 with `Retry-After` up to 60 seconds, or HTTP 503 with a short provider reset or jittered delay. Existing job/retry/token budgets remain in force. See [Gemini availability troubleshooting](gemini-availability.md). No model/provider substitution or offline-example substitution occurs. If hosted review fails, a clearly labeled local verification checklist is returned and the run remains partial.
 
 ## Fallback and coverage
 
-The first acquisition/extraction phase uses dated discovery. A reserved deterministic query combines an observed package/technology and an observed attack mechanism. It removes the publication filter when no usable relevant evidence survives page retrieval or quotation-validated extraction—even when initial URLs existed. If this returns no eligible candidate, a broader mechanism query may use the third search slot; retries still share the same three-search ceiling.
+The first phase uses up to two recent queries. Low-quota planning is deterministic and uses cited technologies, components, and observed behavior. When no observed attack is accepted, up to three historical/mechanism queries and one security-guidance query remove the date filter. Background or advisory records cannot suppress expansion. Six total search requests include retries; query-cache hits and eligible result counts remain visible in coverage. The second extraction batch selects previously unsubmitted source pages, so a high-ranked first page cannot monopolize both batches.
 
-Failed pages are replaced from the ranked pool within the six-attempt acquisition budget. New fallback sources can trigger a second small extraction only if source-text, model-call, estimated-token, and runtime budgets permit it. A reviewer call is reserved. Tavily transient retries consume the same three-search ceiling, and narrative hosts advertising `Retry-After` are deferred while other eligible hosts may replace them. If fallback uses an extra model call, an unaffordable follow-up/re-review is omitted and retained as an open question. A failed follow-up or re-review retains the prior evidence and partial report, records the unresolved question, and downgrades unsupported concerns.
+Failed pages are replaced from the ranked pool within the six-attempt acquisition budget. New fallback sources can trigger a second small extraction only if source-text, model-call, estimated-token, and runtime budgets permit it. A reviewer call is reserved. Tavily transient retries consume the same six-request ceiling, and narrative hosts advertising `Retry-After` are deferred while other eligible hosts may replace them. If fallback uses an extra model call, an unaffordable follow-up/re-review is omitted and retained as an open question. A failed follow-up or re-review retains the prior evidence and partial report, records the unresolved question, and downgrades unsupported concerns.
 
 Coverage artifacts record API/dataset work, cache hits, fetch attempts, candidate counts, unvisited candidates, extraction attempts, and source-text selection. Context reductions are reported as limitations. No relevant incident within searched coverage, incomplete retrieval/provider work, and external evidence with unverified target applicability are distinct outcomes.
 
@@ -131,4 +131,14 @@ Public OSV, GitHub global-advisory, and official MITRE STIX acquisition/normaliz
 
 ### Optional planning warnings
 
-At the default 1,000-token allowance, planning is intentionally deterministic and does not make an unaffordable model request. At larger allowances, a locally blocked query-planning call is recoverable: Python builds the mechanism/technology query and continues discovery. It remains a visible limitation, but is not itself classified as failed extraction. If completed searches return no eligible original reports, extraction is not attempted and the Reviewer is skipped for lack of accepted evidence. This is distinct from extraction actually failing its byte/token guard or provider request; those failures still produce explicit partial research.
+At the default 1,000-token allowance, planning is intentionally deterministic and does not make an unaffordable model request. At larger allowances, a locally blocked query-planning call is recoverable: Python builds the mechanism/technology query and continues discovery. It remains a visible limitation, but is not itself classified as failed extraction. If completed searches return no eligible original reports, extraction is not attempted and the Reviewer still assesses repository observations for defensive improvements. This is distinct from extraction actually failing its byte/token guard or provider request; those failures still produce explicit partial research.
+
+## Repository-only review
+
+The Security Reviewer always runs after successful repository analysis, including when research is empty or failed. Repository improvement findings need valid repository observation IDs, empty incident IDs, empty prerequisite assessments, a preventive action, and a safe verification step. The original incident-linked classifications still require both code and external evidence. Rejected/empty hosted findings can be supplemented with local code-scoped verification checks. Hosted-review errors are retained and mark partial work; no observations yields questions rather than invented citations.
+
+Broader source eligibility includes Elastic, CrowdStrike, SentinelOne, Red Canary, Check Point, and specific OWASP cheat sheets. OWASP guidance is forcibly categorized as background, even if an extraction incorrectly labels it an observed attack. The original HTML/plain-text acquisition, redirect checks, quote validation, date uncertainty, six-page ceiling, and two-extraction ceiling still apply.
+
+## Structured-output compatibility
+
+Groq strict constrained schema output is requested only for the supported GPT-OSS models. Qwen uses best-effort JSON-schema output followed by the same strict local shape and citation validation. A recognized `json_validate_failed` generation error can retry once within the existing per-request, per-job, and researcher token allowances. Generic HTTP 400 errors are not retried. Only a fixed error code is retained; provider messages and failed-generation text are not exposed. This follows [Groq structured-output guidance](https://console.groq.com/docs/structured-outputs); it does not guarantee provider availability or semantic correctness.
