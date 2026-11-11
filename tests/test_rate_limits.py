@@ -16,6 +16,41 @@ ANSWER = {'answer': 'Unknown', 'evidence_ids': [], 'incident_ids': [], 'unknowns
 
 @patch.dict(os.environ, TEST_KEYS)
 class RateLimitTests(unittest.TestCase):
+    def test_structured_generation_error_keeps_only_fixed_code_not_failed_text(self):
+        response = Mock(status=400)
+        response.getheader.return_value = ''
+        response.read.return_value = json.dumps({'error': {'code': 'json_validate_failed',
+            'message': 'sensitive provider message', 'failed_generation': 'private repository text'}}).encode()
+        error = upstream_error(response, host='api.groq.com')
+        self.assertEqual(error.error_code, 'json_validate_failed')
+        self.assertNotIn('private', str(error))
+        self.assertNotIn('sensitive', str(error))
+
+    @patch('devsecops.providers.get_json')
+    def test_known_researcher_generation_error_retries_once_within_shared_limits(self, request):
+        request.side_effect = [FetchError('Structured generation failed', status=400, error_code='json_validate_failed'), groq_response(ANSWER)]
+        client = ModelClient(lambda *args: None, lambda: None)
+        self.assertEqual(client.call('researcher', 'Answer', {}, FOLLOWUP), ANSWER)
+        self.assertEqual(client.request_attempts, 2)
+        self.assertEqual(client.retries, 1)
+
+    @patch('devsecops.providers.get_json')
+    def test_generic_bad_request_is_not_retried(self, request):
+        request.side_effect = FetchError('Bad request', status=400)
+        client = ModelClient(lambda *args: None, lambda: None)
+        with self.assertRaises(ValueError):
+            client.call('researcher', 'Answer', {}, FOLLOWUP)
+        self.assertEqual(request.call_count, 1)
+
+    @patch('devsecops.providers.get_json')
+    def test_known_reviewer_generation_failure_retries_without_switching_model(self, request):
+        request.side_effect = [FetchError('Structured generation failed', status=400, error_code='json_validate_failed'), groq_response(ANSWER)]
+        client = ModelClient(lambda *args: None, lambda: None)
+        self.assertEqual(client.call('reviewer', 'Answer', {}, FOLLOWUP), ANSWER)
+        payloads = [json.loads(c.kwargs['body']) for c in request.call_args_list]
+        self.assertTrue(all(p['model'] == 'openai/gpt-oss-120b' for p in payloads))
+        self.assertEqual(client.retries, 1)
+
     def test_github_403_identifies_exhausted_requests_and_reset_without_body(self):
         response = Mock(status=403)
         headers = {'X-RateLimit-Remaining': '0', 'X-RateLimit-Reset': '1793414451'}
