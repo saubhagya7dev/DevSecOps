@@ -103,7 +103,7 @@ class ModelClient:
             payload = {'model': model, 'max_completion_tokens': max_output_tokens,
                        'messages': [{'role': 'system', 'content': instructions}, {'role': 'user', 'content': text}],
                        'response_format': {'type': 'json_schema', 'json_schema': {
-                           'name': role + '_handoff', 'strict': True, 'schema': schema}}}
+                           'name': role + '_handoff', 'strict': model in ('openai/gpt-oss-20b', 'openai/gpt-oss-120b'), 'schema': schema}}}
         body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
         if role == 'researcher':
             reserved_output = min(max_output_tokens, max(128, RESEARCHER_TOKEN_BUDGET // 3))
