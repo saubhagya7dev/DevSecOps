@@ -29,7 +29,7 @@ test('star texture is deterministic, irregular, bounded, and varies brightness',
 function harness(reduced=false) {
   const frames=[],translations=[];let time=0,draws=0;
   const gradient=()=>({addColorStop(){}});
-  const base={setTransform(){},fillRect(){},beginPath(){},arc(){},fill(){},save(){},restore(){},
+  const base={setTransform(){},clearRect(){},fillRect(){},beginPath(){},arc(){},fill(){},save(){},restore(){},
     scale(){},moveTo(){},lineTo(){},closePath(){},quadraticCurveTo(){},stroke(){},clip(){},
     createLinearGradient:gradient,createRadialGradient:gradient,translate(){},drawImage(){}};
   const ctx={...base,translate:(x,y)=>translations.push([x,y]),drawImage:()=>draws++};
@@ -43,16 +43,17 @@ function harness(reduced=false) {
     window:{addEventListener(){}},
     document:{hidden:false,addEventListener(){},createElement:()=>({getContext:()=>({...base})})}};
   const api=vm.runInNewContext(code+'\nSunrise;',sandbox).create(canvas);
-  function flush(){let count=0;while(frames.length){if(++count>500)throw Error('Animation did not settle');frames.shift()(time+=16);}return count;}
-  flush();
+  function flush(limit=120){let count=0;while(frames.length&&count<limit){count++;frames.shift()(time+=16);}return count;}
+  flush(1);
   return {api,flush,frames,translations,motion,get draws(){return draws;},visibility:(value)=>visibility([{isIntersecting:value}])};
 }
-test('role transition follows the curve, settles, and leaves no idle animation',()=>{
+test('sun transition settles while only the separate star layer continues',()=>{
   const h=harness();h.api.focus(.16);assert.ok(h.flush()>1);
   const [x,y]=h.translations.at(-1);
   assert.ok(Math.abs(x-160)<.001);
   assert.ok(Math.abs(y-(scene.horizonAt(160,1000,700)-1))<.001);
-  assert.equal(h.frames.length,0);
+  const before=h.draws;h.flush(60);assert.equal(h.draws,before,'Do not repaint the atmosphere for twinkling');
+  h.visibility(false);h.flush(1);assert.equal(h.frames.length,0);
 });
 test('reduced motion snaps in one frame and offscreen scenes do not redraw',()=>{
   const h=harness(true);h.api.focus(.84);assert.equal(h.flush(),1);
@@ -68,7 +69,7 @@ test('star hover has a bounded soft falloff and clears without an idle loop',()=
   assert.equal(scene.starInfluence(star,{x:100,y:100}),1);
   assert.equal(scene.starInfluence(star,{x:175,y:100}),0);
   assert.equal(scene.starInfluence(star,{x:137.5,y:100}),.25);
-  const h=harness();h.api.hover({x:100,y:100});assert.equal(h.flush(),1);
+  const h=harness(true);h.api.hover({x:100,y:100});assert.equal(h.flush(),1);
   h.api.hover(null);assert.equal(h.flush(),1);assert.equal(h.frames.length,0);
 });
 
@@ -82,4 +83,15 @@ test('only three eligible sky stars can receive strong pointer illumination',()=
   assert.ok(selected.every(s=>s.glowing&&s.y===100));
   assert.equal(scene.starInfluence({...stars[0],hoverRange:32},{x:145,y:100}),0);
   assert.ok(scene.starInfluence({...stars[0],hoverRange:80},{x:145,y:100})>0);
+});
+
+
+test('twinkling varies independently by star and proximity; reduced motion freezes it',()=>{
+  const star={x:100,y:100,radius:1,color:'255,221,177',hoverRange:60,glowRadius:4,phase:0,speed:1};
+  const near=scene.starAppearance(star,{x:100,y:100},1000);
+  const far=scene.starAppearance(star,{x:155,y:100},1000);
+  assert.ok(near.glow>far.glow&&near.radius>far.radius&&near.alpha>far.alpha);
+  assert.notEqual(scene.starAppearance(star,null,0).alpha,scene.starAppearance(star,null,1000).alpha);
+  assert.notEqual(scene.starAppearance(star,null,1000).alpha,scene.starAppearance({...star,phase:2},null,1000).alpha);
+  assert.deepEqual(scene.starAppearance(star,null,0,true),scene.starAppearance(star,null,5000,true));
 });

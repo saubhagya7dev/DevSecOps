@@ -561,10 +561,20 @@ const Sunrise = (() => {
       .sort((a,b)=>starInfluence(b,pointer)-starInfluence(a,pointer)).slice(0,3);
   }
 
+  function starAppearance(star,pointer,time,reduced=false) {
+    const near=starInfluence(star,pointer);
+    const wave=reduced?.5:.5+.5*Math.sin(time*.001*star.speed+star.phase);
+    const lift=near*(.6+wave*.4);
+    return {alpha:.025+wave*.06+lift*.5,radius:star.radius*(1+lift*.45),
+      glow:star.glowRadius*(.25+wave*.2+lift)};
+  }
   function create(canvas) {
     const ctx = canvas.getContext('2d', {alpha:false});
     if (!ctx) return {focus() {}};
     const motion = matchMedia('(prefers-reduced-motion: reduce)');
+    const shimmer=canvas.parentElement?.querySelector('.star-shimmer')||document.createElement('canvas');
+    const starCtx=shimmer.getContext('2d');
+    let twinklers=[],sceneDirty=true,renderedPosition=null;
     let width=0, height=0, ratio=1, texture=null, stars=[], pointer=null;
     let position=.5, target=.5, frame=0, lastTime=0, visible=true;
     function planetPath() {
@@ -591,6 +601,7 @@ const Sunrise = (() => {
       if (width===bounds.width && height===bounds.height && ratio===nextRatio) return true;
       width=bounds.width;height=bounds.height;ratio=nextRatio;
       canvas.width=Math.round(width*ratio);canvas.height=Math.round(height*ratio);
+      shimmer.width=canvas.width;shimmer.height=canvas.height;sceneDirty=true;
       texture=document.createElement('canvas');texture.width=canvas.width;texture.height=canvas.height;
       const sky=texture.getContext('2d');
       sky.setTransform(canvas.width/width,0,0,canvas.height/height,0,0);
@@ -599,6 +610,8 @@ const Sunrise = (() => {
       blue.addColorStop(0,'#08090c00');blue.addColorStop(.65,'#0b183c66');blue.addColorStop(1,'#17234e99');
       sky.fillStyle=blue;sky.fillRect(0,0,width,height);
       stars=starsFor(width,height);
+      twinklers=stars.filter(star=>star.glowing&&star.y<horizonAt(star.x,width,height)-6)
+        .sort((a,b)=>b.alpha-a.alpha).slice(0,Math.max(4,Math.min(28,Math.round(width*height/45000))));
       stars.forEach(star=>{
         sky.shadowBlur=star.glowing?star.glowRadius*.35:0;
         sky.shadowColor=`rgb(${star.color})`;
@@ -611,17 +624,6 @@ const Sunrise = (() => {
       if (!prepare()) return;
       ctx.setTransform(canvas.width/width,0,0,canvas.height/height,0,0);
       ctx.drawImage(texture,0,0,width,height);
-      // Only nearby stars brighten; keep the surrounding sky and text untouched.
-      if(pointer){
-        ctx.save();ctx.globalCompositeOperation='screen';ctx.shadowBlur=8;
-        nearbyStars(stars,pointer,width,height).forEach(star=>{
-          const influence=starInfluence(star,pointer);
-          if(influence<.015 || star.y>=horizonAt(star.x,width,height))return;
-          ctx.shadowBlur=star.glowRadius*(.5+influence);ctx.shadowColor=`rgb(${star.color})`;
-          ctx.fillStyle=`rgba(${star.color},${influence*.55})`;
-          ctx.beginPath();ctx.arc(star.x,star.y,star.radius*(1+influence*.4),0,Math.PI*2);ctx.fill();
-        });ctx.restore();
-      }
       const sunX=width*position, sunY=horizonAt(sunX,width,height);
       const scale=height;
       // Wide cool air hugs the whole planet, even opposite the warm sunrise.
@@ -649,14 +651,34 @@ const Sunrise = (() => {
       const fade=ctx.createLinearGradient(0,height*.88,0,height);
       fade.addColorStop(0,'#09090900');fade.addColorStop(1,'#090909');ctx.fillStyle=fade;ctx.fillRect(0,height*.88,width,height*.12);
     }
+    function drawStars(time) {
+      if(!starCtx)return;
+      starCtx.setTransform(shimmer.width/width,0,0,shimmer.height/height,0,0);
+      starCtx.clearRect(0,0,width,height);
+      const hovered=nearbyStars(stars,pointer,width,height);
+      const lights=new Set([...(motion.matches?[]:twinklers),...hovered]);
+      starCtx.save();
+      // Clip the light to the sky so stars and halos never shine through the planet.
+      starCtx.beginPath();starCtx.moveTo(0,0);starCtx.lineTo(width,0);
+      starCtx.lineTo(width,horizonAt(width,width,height));
+      starCtx.quadraticCurveTo(width/2,height*.64,0,horizonAt(0,width,height));starCtx.closePath();starCtx.clip();
+      lights.forEach(star=>{
+        const appearance=starAppearance(star,hovered.includes(star)?pointer:null,time,motion.matches);
+        starCtx.shadowColor=`rgb(${star.color})`;starCtx.shadowBlur=appearance.glow;
+        starCtx.fillStyle=`rgba(${star.color},${appearance.alpha})`;
+        starCtx.beginPath();starCtx.arc(star.x,star.y,appearance.radius,0,Math.PI*2);starCtx.fill();
+      });starCtx.restore();
+    }
     function tick(time) {
       frame=0;
       if (!visible || document.hidden) {lastTime=0;return;}
       const delta=lastTime?Math.min(time-lastTime,64):16;lastTime=time;
       position=motion.matches?target:position+(target-position)*(1-Math.exp(-delta/165));
       if (Math.abs(target-position)<.0001)position=target;
-      draw();
-      if (position!==target)frame=requestAnimationFrame(tick);else lastTime=0;
+      if(!prepare())return;
+      if(sceneDirty||position!==renderedPosition){draw();sceneDirty=false;renderedPosition=position;}
+      drawStars(time);
+      if (position!==target||(!motion.matches&&starCtx&&twinklers.length))frame=requestAnimationFrame(tick);else lastTime=0;
     }
     function schedule() {if (!frame && visible && !document.hidden)frame=requestAnimationFrame(tick);}
     function focus(value) {target=Math.max(.08,Math.min(.92,value));schedule();}
@@ -675,7 +697,7 @@ const Sunrise = (() => {
     schedule();
     return {focus,hover};
   }
-  return {create,horizonAt,starsFor,starInfluence,nearbyStars};
+  return {create,horizonAt,starsFor,starInfluence,nearbyStars,starAppearance};
 })();
 
 // Landing-only role emphasis; investigation stages remain controlled by the runner.
