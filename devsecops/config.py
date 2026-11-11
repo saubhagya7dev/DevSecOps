@@ -42,6 +42,7 @@ MAX_REPO_CHARS = 100_000
 MAX_SOURCES = 6
 MAX_SOURCE_CHARS = 18_000
 MAX_JOB_SECONDS = 900
+MAX_QUEUE_SECONDS = 900
 # Discovery has separate budgets; none increase model/search/page-fetch ceilings.
 MAX_DISCOVERY_REQUESTS = 12
 MAX_DATASET_DOWNLOADS = 2

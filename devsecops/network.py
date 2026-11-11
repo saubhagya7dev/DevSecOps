@@ -9,6 +9,8 @@ import time
 from datetime import datetime, timezone
 from urllib.parse import urljoin, urlsplit
 
+from .execution import request_deadline, check_execution
+
 
 class FetchError(ValueError):
     def __init__(self, message, *, status=None, retry_after=None, token_limit=None, requested_tokens=None, daily_limit=False, limit_kind='unknown'):
@@ -111,8 +113,9 @@ def fetch(url, *, headers=None, body=None, limit=2_000_000, timeout=35, redirect
     method = 'POST' if body is not None else 'GET'
     request_headers = {'User-Agent': 'DevSecOps-RepositoryReview/0.1', 'Accept': '*/*'}
     request_headers.update(headers or {})
-    deadline = time.monotonic() + timeout
+    deadline = request_deadline(timeout)
     for hop in range(redirects + 1):
+        check_execution()
         parsed, host, address = public_destination(url)
         remaining = deadline - time.monotonic()
         if remaining <= 0:
@@ -141,6 +144,7 @@ def fetch(url, *, headers=None, body=None, limit=2_000_000, timeout=35, redirect
                 raise FetchError('Response exceeds the permitted size.')
             chunks, size = [], 0
             while True:
+                check_execution()
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     raise FetchError('Request deadline exceeded.')
