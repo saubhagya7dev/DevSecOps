@@ -199,15 +199,16 @@ function renderEvents() {
   if (stickToBottom) el.scrollTop = el.scrollHeight;
 }
 
+const loadJobUpdate = JobUpdates.createLoader(api);
+
 async function reloadCurrent() {
   const id = currentId;
   if (!id) return;
   try {
-    const job = await api(`/api/jobs/${id}`);
-    if (id !== currentId) return;
-    const changed = JSON.stringify(current) !== JSON.stringify(job);
+    const job = await loadJobUpdate(id, current);
+    if (!JobUpdates.shouldApply(currentId, current, job)) return;
     current = job;
-    if (changed) renderJob();
+    renderJob();
   } catch (error) { if (id === currentId) { $('job-error').hidden = false; $('job-error').textContent = error.message; } }
 }
 

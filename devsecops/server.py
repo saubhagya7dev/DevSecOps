@@ -64,18 +64,24 @@ def make_handler(store, runner, token, cache=None):
                 return self.send(200, {**provider_configuration(),
                                        'token': token, 'demo_url': DEMO_URL})
             if route.path == '/api/jobs':
-                return self.send(200, store.list())
+                try:
+                    query = parse_qs(route.query)
+                    return self.send(200, store.list(limit=int(query.get('limit', ['50'])[0]), before=query.get('before', [None])[0]))
+                except ValueError:
+                    return self.send(400, {'error': 'Invalid history page size.'})
             if route.path == '/api/storage':
                 try:
                     return self.send(200, {'history': store.storage_stats(), 'cache': cache.storage_stats()})
                 except (OSError, ValueError):
                     return self.send(500, {'error': 'Local storage statistics are unavailable.'})
-            match = re.fullmatch(r'/api/jobs/([a-f0-9]{32})(?:/(events|report|artifacts))?', route.path)
+            match = re.fullmatch(r'/api/jobs/([a-f0-9]{32})(?:/(events|report|artifacts|status))?', route.path)
             if match:
                 job_id, resource = match.groups()
-                job = store.get(job_id)
+                job = store.metadata(job_id) if resource in ('status', 'events') else store.get(job_id)
                 if not job:
                     return self.send(404, {'error': 'Analysis not found.'})
+                if resource == 'status':
+                    return self.send(200, job)
                 if resource == 'report':
                     if not job['report']:
                         return self.send(409, {'error': 'Report is not ready.'})
@@ -111,7 +117,7 @@ def make_handler(store, runner, token, cache=None):
                         pass
                     return
                 return self.send(200, job)
-            paths = {'/': 'index.html', '/app.js': 'app.js', '/graph.js': 'graph.js', '/markdown.js': 'markdown.js', '/styles.css': 'styles.css', '/favicon.svg': 'favicon.svg'}
+            paths = {'/': 'index.html', '/app.js': 'app.js', '/graph.js': 'graph.js', '/markdown.js': 'markdown.js', '/job-updates.js': 'job-updates.js', '/styles.css': 'styles.css', '/favicon.svg': 'favicon.svg'}
             if route.path in paths:
                 path = ROOT / 'web' / paths[route.path]
                 return self.send(200, path.read_bytes(), mimetypes.guess_type(path)[0] or 'application/octet-stream')

@@ -126,3 +126,27 @@ class StorageApiTests(LocalStorageTests):
         self.assertEqual(self.request('/api/storage/clear', {'scope': 'all', 'confirmation': 'CLEAR'})[0], 409)
         self.assertIsNotNone(self.cache.get('fixture'))
         self.assertEqual(self.store.storage_stats()['investigations'], 1)
+
+    def test_status_endpoint_omits_evidence_and_tracks_payload_revision(self):
+        job = self.saved()
+        status, metadata = self.request('/api/jobs/' + job['id'] + '/status')
+        self.assertEqual(status, 200)
+        self.assertNotIn('artifacts', metadata)
+        self.assertNotIn('report', metadata)
+        before = metadata['payload_revision']
+        self.store.stage(job['id'], 'validation', 'completed')
+        updated = self.request('/api/jobs/' + job['id'] + '/status')[1]
+        self.assertGreater(updated['revision'], metadata['revision'])
+        self.assertEqual(updated['payload_revision'], before)
+        self.store.artifact(job['id'], 'additional', {'saved': True})
+        self.assertGreater(self.request('/api/jobs/' + job['id'] + '/status')[1]['payload_revision'], before)
+
+    def test_history_pagination_is_separate_from_lifecycle_queries(self):
+        oldest = self.saved()
+        newest = self.saved()
+        status, page = self.request('/api/jobs?limit=1')
+        self.assertEqual(status, 200)
+        self.assertEqual([j['id'] for j in page], [newest['id']])
+        page = self.request('/api/jobs?limit=1&before=' + newest['id'])[1]
+        self.assertEqual([j['id'] for j in page], [oldest['id']])
+        self.assertEqual(self.request('/api/jobs?limit=0')[0], 400)
