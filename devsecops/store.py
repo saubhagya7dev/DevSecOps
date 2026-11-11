@@ -11,6 +11,7 @@ from .migrations import migrate
 
 ACTIVE = ('queued', 'running', 'cancelling')
 TERMINAL = ('completed', 'partial', 'failed', 'cancelled')
+ARTIFACT_VERSIONS = {'review': 2}
 
 
 def now():
@@ -58,7 +59,7 @@ class Store:
         if 'artifacts' in updates:
             db.execute('DELETE FROM artifacts WHERE job_id=?', (job['id'],))
             for key, value in updates.pop('artifacts').items():
-                db.execute('INSERT INTO artifacts VALUES (?,?,?,?)', (job['id'], key, 1, json.dumps(value)))
+                db.execute('INSERT INTO artifacts VALUES (?,?,?,?)', (job['id'], key, ARTIFACT_VERSIONS.get(key, 1), json.dumps(value)))
         if 'report' in updates:
             report = updates.pop('report')
             db.execute('INSERT OR REPLACE INTO reports VALUES (?,?)', (job['id'], report))
@@ -108,7 +109,7 @@ class Store:
             job = self._metadata(db, job_id)
             if not job:
                 raise KeyError(job_id)
-            db.execute('INSERT OR REPLACE INTO artifacts VALUES (?,?,?,?)', (job_id, key, 1, json.dumps(value)))
+            db.execute('INSERT OR REPLACE INTO artifacts VALUES (?,?,?,?)', (job_id, key, ARTIFACT_VERSIONS.get(key, 1), json.dumps(value)))
             self._save(db, job, {}, payload_changed=True)
 
     def transition(self, job_id, expected, **updates):

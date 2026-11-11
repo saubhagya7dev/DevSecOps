@@ -89,6 +89,10 @@ repository observations. Look for defenses and counterevidence before making rec
 4 findings. Keep descriptions to one short sentence and lists to three short items. Every finding needs at least one valid incident_id and one repository evidence_id. A shared stack
 alone is Background lesson, never Supported concern. An inferred observation alone cannot support a concern.
 When deployment/configuration/version evidence is missing, use Needs verification and list exactly what is missing.
+Provide one prerequisite_assessments entry per material prerequisite, with supported, contradicted, or unknown
+state, cited evidence_ids/incident_ids, and a short reason. Supported entries need direct observed repository
+evidence and incident references. Any contradicted material prerequisite rejects the match; unknown prerequisites
+require Needs verification. Supported concern requires nonempty assessments, all supported, and no missing information.
 A Supported concern is not confirmed exploitability. Provide a concrete preventive action and a safe verification
 step for each finding, without executing anything. Do not recommend a missing defense that repository evidence
 shows is already present. Prioritize by plausible impact and evidence confidence separately. Allow no findings.

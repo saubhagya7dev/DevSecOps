@@ -5,7 +5,8 @@ from datetime import datetime, timezone
 from .agents import ModelClient, analyze_repository, research_incidents, review_security, answer_followup
 from .config import MAX_JOB_SECONDS, ROLE_MODELS, missing_credentials
 from .demo import fixture
-from .evidence import render_report, validate_profile, validate_research, validate_review
+from .evidence import validate_profile, validate_research, validate_review
+from .reporting import render_report
 from .repository import inspect_repo
 
 
