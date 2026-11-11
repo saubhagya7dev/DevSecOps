@@ -149,12 +149,16 @@
       this.canvas.dataset.dpr=String(dpr);if((!this.fitted||this.autoFit)&&this.model.nodes.length)this.fit();else this.draw();
     }
     setModel(model){
+      const topology=JSON.stringify([model.nodes.map(n=>n.id).sort(),model.edges.map(e=>[e.from,e.to,e.kind]).sort()]);
+      const changed=topology!==this.topology;this.topology=topology;
       const previous=new Map(this.model.nodes.map(n=>[n.id,n]));
       model.nodes=model.nodes.map(n=>{const old=previous.get(n.id);if(old&&old!==n)Object.assign(n,{x:old.x,y:old.y,vx:old.vx||0,vy:old.vy||0,...(old.fx!==undefined?{fx:old.fx,fy:old.fy}:{})});return n;});
       this.pointers.forEach(p=>{if(p.node)p.node=model.nodes.find(n=>n.id===p.node.id)||null;});
-      this.model=model;if(this.hover&&!model.nodes.some(n=>n.id===this.hover)){this.hover=null;this.onHover(null);this.canvas.classList.remove('over-node');}this.reheat();if(!this.fitted&&model.nodes.length)this.fit();
+      this.model=model;if(this.hover&&!model.nodes.some(n=>n.id===this.hover)){this.hover=null;this.onHover(null);this.canvas.classList.remove('over-node');}
+      if(changed)this.reheat();else this.draw();
+      if(!this.fitted&&model.nodes.length)this.fit();
     }
-    reset(){this.model={nodes:[],edges:[],groups:[]};this.fitted=false;this.pointers.clear();this.pinch=null;this.hover=null;this.selected=null;this.alpha=0;this.autoFit=true;this.draw();}
+    reset(){this.model={nodes:[],edges:[],groups:[]};this.fitted=false;this.pointers.clear();this.pinch=null;this.hover=null;this.selected=null;this.alpha=0;this.autoFit=true;this.topology=null;this.lastFrameTime=null;this.draw();}
     update(settings,selected){this.settings={...this.settings,...settings};this.selected=selected;this.draw();}
     fit(smooth=false,redraw=true,blend=.12){
       const nodes=this.model.nodes;if(!nodes.length||!this.width)return;

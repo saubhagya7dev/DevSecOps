@@ -193,3 +193,16 @@ test('auto-fit follows moving bounds every frame and renders only once per frame
     assert.deepEqual(view.camera,camera);
   } finally {if(originalDocument===undefined)delete globalThis.document;else globalThis.document=originalDocument;}
 });
+
+test('metadata refreshes preserve cooling and positions; topology changes reheat', () => {
+  const view=Object.create(CanvasView.prototype);let reheats=0;
+  Object.assign(view,{model:{nodes:[],edges:[]},pointers:new Map(),fitted:true,hover:null,
+    reheat(){reheats++;this.alpha=.8;this.ticks=0;},draw(){}});
+  view.setModel({nodes:[{id:'a',x:100,y:200,radius:8}],edges:[]});
+  view.alpha=.12;view.ticks=85;view.model.nodes[0].vx=.7;
+  view.setModel({nodes:[{id:'a',x:900,y:900,radius:8,label:'New metadata'}],edges:[]});
+  assert.equal(reheats,1);assert.equal(view.alpha,.12);assert.equal(view.ticks,85);
+  assert.equal(view.model.nodes[0].x,100);assert.equal(view.model.nodes[0].vx,.7);
+  view.setModel({nodes:[{id:'a'},{id:'b',x:300,y:200,radius:6}],edges:[{from:'a',to:'b',kind:'structure'}]});
+  assert.equal(reheats,2);assert.equal(view.alpha,.8);
+});
