@@ -691,6 +691,7 @@ const Sunrise = (() => {
 
 // Pointer light for real text: no duplicate text layers or layout changes.
 const LuminousType = (() => {
+  function isIntroText(element) {return Boolean(element?.closest('.landing-intro'));}
   function follow(state, delta, reduced) {
     const blend=reduced?1:1-Math.exp(-Math.min(delta,64)/65);
     state.x+=(state.targetX-state.x)*blend;state.y+=(state.targetY-state.y)*blend;
@@ -701,7 +702,7 @@ const LuminousType = (() => {
   function mount(root=document) {
     if(!CSS.supports('background-clip','text')||!CSS.supports('color','color-mix(in srgb,white,black)'))return;
     const motion=matchMedia('(prefers-reduced-motion: reduce)');
-    const selector='h1,h2,h3,p,.intro-role>span,.intro-role>strong,.intro-assurance,.eyebrow,.agent-metric,.agent-operation,.event-title,.event-detail,.brand';
+    const selector='h2,p,.intro-role>span,.intro-role>strong,.intro-assurance,.eyebrow';
     const states=new Map();let active=null,frame=0,lastTime=0;
     function remove(element){
       element.classList.remove('luminous-text');
@@ -737,13 +738,13 @@ const LuminousType = (() => {
       if(event.pointerType==='touch')return;
       let element=event.target.closest(selector);
       // Do not make inherited SVG icons or interactive descendants transparent.
-      if(element?.querySelector('svg,input,select,button,a'))element=null;
+      if(!isIntroText(element)||element.querySelector('svg,input,select,button,a'))element=null;
       if(!element){light(null);return;}
       const bounds=element.getBoundingClientRect();light(element,event.clientX-bounds.left,event.clientY-bounds.top);
     },{passive:true});
     root.addEventListener('focusin',event=>{
       const element=event.target.closest('.intro-role')?.querySelector('strong');
-      if(element){const box=element.getBoundingClientRect();light(element,box.width/2,box.height/2);}
+      if(isIntroText(element)){const box=element.getBoundingClientRect();light(element,box.width/2,box.height/2);}
     });
     root.addEventListener('focusout',()=>light(null));
     root.addEventListener('scroll',()=>light(null),{passive:true,capture:true});
@@ -754,7 +755,7 @@ const LuminousType = (() => {
     });
     motion.addEventListener('change',schedule);
   }
-  return {follow,mount};
+  return {follow,mount,isIntroText};
 })();
 LuminousType.mount();
 

@@ -22,7 +22,7 @@ test('spotlight uses existing text without duplicates and restores styles on exi
   const frames=[],events={},properties=new Map(),classes=new Set();let time=0;
   const element={isConnected:true,style:{setProperty:(k,v)=>properties.set(k,v),removeProperty:k=>properties.delete(k)},
     classList:{add:k=>classes.add(k),remove:k=>classes.delete(k)},
-    querySelector:()=>null,getBoundingClientRect:()=>({left:10,top:20}),
+    closest:selector=>selector==='.landing-intro'?{}:null,querySelector:()=>null,getBoundingClientRect:()=>({left:10,top:20}),
     get textContent(){return 'Original readable text';},set textContent(value){throw Error('Do not rewrite text');}};
   const document={hidden:false,documentElement:{addEventListener:(k,v)=>events[k]=v},addEventListener:(k,v)=>events[k]=v};
   const sandbox={CSS:{supports:()=>true},matchMedia:()=>({matches:false,addEventListener(){}}),
@@ -34,4 +34,13 @@ test('spotlight uses existing text without duplicates and restores styles on exi
   assert.equal(element.textContent,'Original readable text');assert.equal(properties.get('--type-base'),'rgb(170, 170, 170)');
   assert.equal(properties.get('--type-strength'),'100.00%');assert.ok(classes.has('luminous-text'));
   events.pointerleave();flush();assert.equal(classes.size,0);assert.equal(properties.size,0);
+});
+
+
+test('luminous text is limited to introduction descendants, excluding navigation and workbench',()=>{
+  assert.equal(effects.isIntroText({closest:selector=>selector==='.landing-intro'?{}:null}),true);
+  for(const name of ['navigation','report','activity','graph inspector']) {
+    assert.equal(effects.isIntroText({closest:()=>null}),false,name);
+  }
+  assert.equal(effects.isIntroText(null),false);
 });
