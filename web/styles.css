@@ -1736,6 +1736,7 @@ main>.investigation-heading {border-top:1px solid var(--line)}
     background-clip:text;
     -webkit-background-clip:text;
     color:transparent!important;
+    transition:none!important;
   }
 }
 @media(forced-colors:active) {.luminous-text {background:none;color:CanvasText!important}}
