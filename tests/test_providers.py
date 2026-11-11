@@ -40,7 +40,7 @@ class ProviderTests(unittest.TestCase):
             self.assertEqual(call.args[0], 'https://api.groq.com/openai/v1/chat/completions')
             payload = json.loads(call.kwargs['body'])
             self.assertEqual(payload['model'], model)
-            self.assertTrue(payload['response_format']['json_schema']['strict'])
+            self.assertEqual(payload['response_format']['json_schema']['strict'], role == 'reviewer')
             self.assertNotIn('tools', payload)
             self.assertEqual(call.kwargs['headers']['Authorization'], 'Bearer test-groq')
             self.assertNotIn('x-goog-api-key', call.kwargs['headers'])
@@ -84,17 +84,17 @@ class ProviderTests(unittest.TestCase):
     def test_tavily_uses_separate_auth_and_bounded_allowlisted_search(self, request):
         request.return_value = {'results': []}
         client = self.client()
-        for _ in range(3):
+        for _ in range(6):
             client.search('SSRF incident', ['cisa.gov'], date(2026, 1, 1), date(2026, 10, 30))
         payload = json.loads(request.call_args.kwargs['body'])
         self.assertEqual(payload['include_domains'], ['cisa.gov'])
         self.assertEqual(payload['start_date'], '2026-01-01')
-        self.assertEqual(payload['max_results'], 6)
+        self.assertEqual(payload['max_results'], 8)
         self.assertFalse(payload['include_answer'])
         self.assertEqual(request.call_args.kwargs['headers']['Authorization'], 'Bearer test-tavily')
         with self.assertRaisesRegex(ValueError, 'budget exhausted'):
-            client.search('fourth query', [], '', '')
-        self.assertEqual(request.call_count, 3)
+            client.search('seventh query', [], '', '')
+        self.assertEqual(request.call_count, 6)
         self.assertEqual(client.calls, 0)
 
     @patch('devsecops.providers.get_json')
@@ -141,7 +141,7 @@ class ProviderTests(unittest.TestCase):
         client.call.side_effect = [
             {'queries': ['first query', 'second query']},
             {key: research[key] for key in ('incidents', 'research_limitations')}]
-        client.search.side_effect = [ValueError('Tavily search failed'), {'results': [{'url': url}]}]
+        client.search.side_effect = [ValueError('Tavily search failed'), {'results': [{'url': url}]}] + [{'results': []}] * 4
         result = research_incidents(profile, client, lambda *args: None, lambda: None)
         self.assertEqual(len(result['sources']), 1)
         self.assertTrue(result['incidents'])
