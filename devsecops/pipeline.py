@@ -1,6 +1,7 @@
 import time
 import logging
 from dataclasses import dataclass
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
@@ -19,12 +20,12 @@ class Cancelled(Exception):
 
 @dataclass(frozen=True)
 class ReviewServices:
-    client_factory: object
-    inspect_repository: object
-    analyze: object
-    research: object
-    review: object
-    followup: object
+    client_factory: Callable
+    inspect_repository: Callable
+    analyze: Callable
+    research: Callable
+    review: Callable
+    followup: Callable
 
 
 class Runner:
@@ -33,6 +34,11 @@ class Runner:
         self.services = services
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='review')
         self.demo_delay = demo_delay
+
+    def close(self):
+        for job in self.store.list_active():
+            self.store.cancel(job['id'])
+        self.pool.shutdown(wait=True, cancel_futures=True)
 
     def submit(self, job_id):
         return self.pool.submit(self.run, job_id)

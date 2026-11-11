@@ -1,5 +1,6 @@
 """Loopback-only local API and static UI, using the Python standard library."""
 import json
+import logging
 import mimetypes
 import re
 import secrets
@@ -19,11 +20,41 @@ from .cache import ResearchCache
 TERMINAL = {'completed', 'partial', 'failed', 'cancelled'}
 
 
+class LocalHTTPServer(ThreadingHTTPServer):
+    """Bound concurrent local clients and let shutdown drain handlers safely."""
+    daemon_threads = False
+
+    def __init__(self, *args, max_clients=16, **kwargs):
+        self.slots = threading.BoundedSemaphore(max_clients)
+        self.stopping = threading.Event()
+        super().__init__(*args, **kwargs)
+
+    def process_request(self, request, client_address):
+        if self.stopping.is_set() or not self.slots.acquire(blocking=False):
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self.slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self.slots.release()
+
+    def handle_error(self, request, client_address):
+        logging.getLogger(__name__).error('Local HTTP request failed; no request details logged.')
+
+
 def make_handler(store, runner, token, cache=None):
     submission_lock = threading.Lock()
     cache = cache if cache is not None else ResearchCache()
     class Handler(BaseHTTPRequestHandler):
         protocol_version = 'HTTP/1.1'
+        timeout = 10
 
         def log_message(self, fmt, *args):
             # Avoid logging user-provided URL/query data or headers.
@@ -101,6 +132,9 @@ def make_handler(store, runner, token, cache=None):
                     self.close_connection = True
                     try:
                         for _ in range(120):
+                            stopping = getattr(self.server, 'stopping', None)
+                            if stopping is not None and stopping.is_set():
+                                break
                             events = store.events(job_id, after)
                             for event in events:
                                 after = event['seq']
@@ -195,18 +229,20 @@ def _serve(port):
     store = Store()
     runner = Runner(store)
     handler = make_handler(store, runner, secrets.token_urlsafe(32))
-    server = ThreadingHTTPServer(('127.0.0.1', port), handler)
-    store.recover()
-    server.daemon_threads = True
-    print(f'DevSecOps is running at http://127.0.0.1:{server.server_port}', flush=True)
-    print('Live analysis configured.' if not missing_credentials() else
-          'Offline example available. Configure ' + ', '.join(missing_credentials()) + ' in .env for live analysis.', flush=True)
+    server = None
     try:
+        server = LocalHTTPServer(('127.0.0.1', port), handler)
+        store.recover()
+        print(f'DevSecOps is running at http://127.0.0.1:{server.server_port}', flush=True)
+        print('Live analysis configured.' if not missing_credentials() else
+              'Offline example available. Configure ' + ', '.join(missing_credentials()) + ' in .env for live analysis.', flush=True)
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
-        server.server_close()
-        for job in store.list_active():
-            store.cancel(job['id'])
-        runner.pool.shutdown(wait=True, cancel_futures=True)
+        if server is not None:
+            server.stopping.set()
+            server.server_close()
+            runner.close()
+        else:
+            runner.pool.shutdown(wait=True)

@@ -1,4 +1,7 @@
 import os
+from dataclasses import dataclass
+from types import MappingProxyType
+from collections.abc import Mapping
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -13,12 +16,11 @@ def load_env():
                 os.environ.setdefault(key.strip(), value.strip().strip('\"\''))
 
 
-load_env()
 DATA = ROOT / '.devsecops'
 ROLE_MODELS = {
-    'analyst': {'provider': 'gemini', 'model': os.getenv('ANALYST_MODEL', 'gemini-3.5-flash-lite'), 'credential': 'GEMINI_API_KEY'},
-    'researcher': {'provider': 'groq', 'model': os.getenv('RESEARCHER_MODEL', 'qwen/qwen3.8-27b'), 'credential': 'GROQ_API_KEY'},
-    'reviewer': {'provider': 'groq', 'model': os.getenv('REVIEWER_MODEL', 'openai/gpt-oss-120b'), 'credential': 'GROQ_API_KEY'},
+    'analyst': {'provider': 'gemini', 'model': 'gemini-3.5-flash-lite', 'credential': 'GEMINI_API_KEY'},
+    'researcher': {'provider': 'groq', 'model': 'qwen/qwen3.8-27b', 'credential': 'GROQ_API_KEY'},
+    'reviewer': {'provider': 'groq', 'model': 'openai/gpt-oss-120b', 'credential': 'GROQ_API_KEY'},
 }
 
 
@@ -47,9 +49,44 @@ MAX_QUEUE_SECONDS = 900
 MAX_DISCOVERY_REQUESTS = 12
 MAX_DATASET_DOWNLOADS = 2
 MAX_DISCOVERY_RECORDS = 24
-RESEARCHER_TOKEN_BUDGET = int(os.getenv('RESEARCHER_TOKEN_BUDGET', '1000'))
-if RESEARCHER_TOKEN_BUDGET <= 0:
-    raise ValueError('RESEARCHER_TOKEN_BUDGET must be positive; the configured allowance is never raised automatically.')
+RESEARCHER_TOKEN_BUDGET = 1000
 RESEARCH_CACHE_TTL = 86400
-ENABLE_VCDB = os.getenv('ENABLE_VCDB', '0') == '1'
+ENABLE_VCDB = False
 STAGES = ['prepare', 'analyst', 'researcher', 'reviewer', 'validation']
+
+
+@dataclass(frozen=True)
+class Settings:
+    role_models: Mapping
+    researcher_token_budget: int
+    vcdb_enabled: bool
+
+
+def read_settings(environ=None):
+    """Pure settings parsing; importing this module never reads a local .env file."""
+    environ = os.environ if environ is None else environ
+    defaults = {'analyst': ('gemini', 'gemini-3.5-flash-lite', 'GEMINI_API_KEY'),
+                'researcher': ('groq', 'qwen/qwen3.8-27b', 'GROQ_API_KEY'),
+                'reviewer': ('groq', 'openai/gpt-oss-120b', 'GROQ_API_KEY')}
+    roles = {role: MappingProxyType({'provider': provider,
+             'model': environ.get(role.upper() + '_MODEL', default), 'credential': credential})
+             for role, (provider, default, credential) in defaults.items()}
+    try:
+        budget = int(environ.get('RESEARCHER_TOKEN_BUDGET', '1000'))
+    except (ValueError, TypeError) as exc:
+        raise ValueError('RESEARCHER_TOKEN_BUDGET must be a positive integer.') from exc
+    if budget <= 0:
+        raise ValueError('RESEARCHER_TOKEN_BUDGET must be a positive integer.')
+    return Settings(MappingProxyType(roles), budget, environ.get('ENABLE_VCDB', '0') == '1')
+
+
+def configure():
+    """Startup only: call before importing provider/workflow modules."""
+    global RESEARCHER_TOKEN_BUDGET, ENABLE_VCDB
+    load_env()
+    settings = read_settings()
+    ROLE_MODELS.clear()
+    ROLE_MODELS.update({role: dict(value) for role, value in settings.role_models.items()})
+    RESEARCHER_TOKEN_BUDGET = settings.researcher_token_budget
+    ENABLE_VCDB = settings.vcdb_enabled
+    return settings
