@@ -2,6 +2,7 @@
 import re
 from urllib.parse import urlsplit, urlunsplit
 from .network import redact
+from .config import MAX_SEARCH_RESULTS
 
 RULES = {
     'thedfirreport.com': r'/\d{4}/\d{2}/\d{2}/[^/]+/?$',
@@ -17,6 +18,12 @@ RULES = {
     'blog.cloudflare.com': r'/[^/]+/?$',
     'blog.pypi.org': r'/posts/[^/]+/?$',
     'research.jfrog.com': r'/post/[^/]+/?$',
+    'www.elastic.co': r'/security-labs/[^/]+/?$',
+    'www.crowdstrike.com': r'/(?:en-us/)?blog/[^/]+/?$',
+    'www.sentinelone.com': r'/labs/[^/]+/?$',
+    'redcanary.com': r'/blog/(?:[^/]+/){1,3}$',
+    'research.checkpoint.com': r'/\d{4}/[^/]+/?$',
+    'cheatsheetseries.owasp.org': r'/cheatsheets/[^/]+_Cheat_Sheet\.html$',
 }
 TRUSTED_DOMAINS = list(RULES)
 EXCLUDED = {'blog', 'reports', 'research', 'security', 'index', 'feed', 'rss', 'about', 'pricing',
@@ -55,7 +62,7 @@ def eligible_report(url, title=''):
 
 def candidates(response):
     result, seen = [], set()
-    for item in response.get('results', [])[:6]:
+    for item in response.get('results', [])[:MAX_SEARCH_RESULTS]:
         if not isinstance(item, dict):
             continue
         title = item.get('title') if isinstance(item.get('title'), str) else ''
