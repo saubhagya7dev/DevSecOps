@@ -123,8 +123,12 @@ def reviewer_views(profile, research):
                           else short(value, 800 if key == 'source_quote' else 320) if isinstance(value, str) else value
                           for key, value in incident.items()})
     return ({'observations': observations,
+             'components': [{'name': short(c['name'], 100), 'description': short(c['description'], 180),
+                             'evidence_ids': c['evidence_ids'][:4]} for c in profile.get('components', [])[:6]],
              'technologies': [{'name': short(t['name'], 80), 'version': short(t['version'], 60),
                                'evidence_ids': t['evidence_ids'][:4]} for t in profile['technologies'][:8]],
              'unknowns': [short(q, 160) for q in profile['unknowns'][:3]],
              'coverage_limit': 'At most sixteen observations and four incidents, with shortened fields. Missing detail remains unknown.'},
-            {'incidents': incidents, 'research_limitations': [short(q, 180) for q in research['research_limitations'][:3]]})
+            {'incidents': incidents, 'status': research.get('status', 'unknown'),
+             'outcome': research.get('outcome', ''),
+             'research_limitations': [short(q, 180) for q in research['research_limitations'][:3]]})
