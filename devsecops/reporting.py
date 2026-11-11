@@ -43,9 +43,13 @@ def render_report(repo, profile, research, review, validation, demo=False):
         lines += ['No evidence-backed recommendations were established. This is not a declaration that the repository is secure.', '']
     for f in review['findings']:
         lines += [f"### {t(f['title'])}", '', f"**{f['classification']} · Impact: {f['impact']} · Confidence: {f['confidence']}**", '',
+                  ('Basis: repository evidence only; this is a defensive improvement or verification check, not an incident-linked vulnerability.'
+                   if f['classification'] == 'Repository improvement' else 'Basis: repository evidence and cited external mechanism.'), '',
                   f"Mechanism: {t(f['mechanism'])}", '', f"Prerequisite: {t(f['prerequisite'])}", '',
                   t(f['reasoning']), '', f"Counterevidence: {t(f['counterevidence'])}", '',
-                  f"Evidence: {', '.join(f['evidence_ids'])}. Incidents: {', '.join(f['incident_ids'])}.", '',
+                  (f"Evidence: {', '.join(f['evidence_ids'])}. No external incident is asserted."
+                   if f['classification'] == 'Repository improvement' else
+                   f"Evidence: {', '.join(f['evidence_ids'])}. Incidents: {', '.join(f['incident_ids'])}."), '',
                   f"**Action:** {t(f['action'])}", '', f"**Verify:** {t(f['verification'])}", '',
                   '**Missing information:** ' + t('; '.join(f['missing_information']) or 'None identified within inspected evidence.'), '']
         for assessment in f.get('prerequisite_assessments', []):
@@ -74,7 +78,9 @@ def render_report(repo, profile, research, review, validation, demo=False):
                           '> ' + t(support['source_quote']), '']
     if research.get('coverage'):
         lines += ['## Discovery coverage', '', t(research.get('outcome', '')), '',
-                  *[f'- {t(key)}: {t(value)}' for key, value in research['coverage'].items()], '']
+                  *[f'- {t(key)}: {t(value)}' for key, value in research['coverage'].items() if key != 'queries'], '']
+        for query in research['coverage'].get('queries', []):
+            lines += [f"- Search ({t(query['phase'])}, {t(query['status'])}, {query['eligible_results']} eligible results): {t(query['query'])}", '']
     if research.get('advisories'):
         lines += ['## Package vulnerability advisories — not proof of an incident', '']
         for advisory in research['advisories']:
