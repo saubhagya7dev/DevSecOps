@@ -155,11 +155,12 @@ class ModelClient:
                 retryable = (exc.status == 429 and not exc.daily_limit and not oversized
                              and exc.retry_after is not None and exc.retry_after <= 60)
                 unavailable = (exc.status == 503 and (exc.retry_after is None or exc.retry_after <= 60))
-                retryable = retryable or unavailable
+                invalid_generation = provider == 'groq' and exc.status == 400 and exc.error_code == 'json_validate_failed'
+                retryable = retryable or unavailable or invalid_generation
                 if retryable and attempt == 0 and self.retries < 3:
                     self.retries += 1
-                    delay = exc.retry_after + 0.5 if exc.retry_after is not None else random.uniform(1, 3)
-                    self.emit(role, 'Provider unavailable; waiting to retry' if unavailable else 'Rate limited; waiting to retry',
+                    delay = 0 if invalid_generation else exc.retry_after + 0.5 if exc.retry_after is not None else random.uniform(1, 3)
+                    self.emit(role, 'Structured output failed; retrying once' if invalid_generation else 'Provider unavailable; waiting to retry' if unavailable else 'Rate limited; waiting to retry',
                               f'{provider} · HTTP {exc.status} · waiting {delay:g}s; one retry for this request')
                     deadline = time.monotonic() + delay
                     while time.monotonic() < deadline:
