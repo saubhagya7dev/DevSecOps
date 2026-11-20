@@ -16,6 +16,8 @@ One public GitHub URL. Three AI roles. A traceable path from source code to prev
 
 [Quick start](#quick-start) · [How it works](#how-it-works) · [Architecture](#architecture) · [Example report](docs/examples/offline-report.md)
 
+[Complete project guide](docs/project-guide.md) — architecture, AI roles, retrieval, setup, API, security, testing, and limitations.
+
 </div>
 
 
